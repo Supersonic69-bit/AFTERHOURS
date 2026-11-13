@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.12 | ORIGINAL GAME + GPU OPTIMIZATION
+// BUILD 0.9.13 | PERFORMANCE EDITION
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -19,7 +19,14 @@ let steering = 0;
 let cashTotal = 0;
 
 const MAX_SPEED = 2.1;
-const MAX_PIXEL_RATIO = 1.25;
+const DESKTOP_PIXEL_RATIO = 1.0;
+const MOBILE_PIXEL_RATIO = 1.25;
+const MIN_PIXEL_RATIO = 0.65;
+
+let currentPixelRatio = Math.min(
+  window.devicePixelRatio || 1,
+  isMobile ? MOBILE_PIXEL_RATIO : DESKTOP_PIXEL_RATIO
+);
 
 const keys = {
   left:false,
@@ -32,9 +39,9 @@ const keys = {
 // INPUT PROTECTION
 // ==========================================
 
-document.addEventListener("contextmenu", e => e.preventDefault());
-document.addEventListener("selectstart", e => e.preventDefault());
-document.addEventListener("dragstart", e => e.preventDefault());
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("selectstart",e=>e.preventDefault());
+document.addEventListener("dragstart",e=>e.preventDefault());
 
 const style = document.createElement("style");
 style.textContent = `
@@ -80,18 +87,18 @@ document.head.appendChild(style);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x03050b);
-scene.fog = new THREE.Fog(0x111820, 100, 520);
+scene.fog = new THREE.Fog(0x111820,100,520);
 
 const camera = new THREE.PerspectiveCamera(
   65,
-  window.innerWidth / window.innerHeight,
+  window.innerWidth/window.innerHeight,
   0.1,
-  900
+  520
 );
-camera.position.set(0, 5.5, 14);
+camera.position.set(0,5.5,14);
 
 // ==========================================
-// OPTIMIZED WEBGL RENDERER
+// PERFORMANCE RENDERER
 // ==========================================
 
 const renderer = new THREE.WebGLRenderer({
@@ -99,27 +106,118 @@ const renderer = new THREE.WebGLRenderer({
   alpha:false,
   powerPreference:"high-performance",
   stencil:false,
-  depth:true
+  depth:true,
+  preserveDrawingBuffer:false
 });
 
-renderer.setPixelRatio(
-  Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
-);
-
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(currentPixelRatio);
+renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = false;
+renderer.info.autoReset = true;
 
 game.appendChild(renderer.domElement);
 
 const textureLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 
-// Shared planet geometries reduce GPU memory overhead.
-const planetGeometry = new THREE.SphereGeometry(1, 40, 32);
-const planetGlowGeometry = new THREE.SphereGeometry(1.045, 32, 24);
+// Shared, lower-polygon planet geometry.
+const planetGeometry = new THREE.SphereGeometry(1,24,18);
+const planetGlowGeometry = new THREE.SphereGeometry(1.045,16,12);
+
+// ==========================================
+// ADAPTIVE RESOLUTION
+// ==========================================
+
+let resolutionCheckTime = 0;
+let frameSamples = 0;
+let frameTimeTotal = 0;
+let resolutionCooldown = 0;
+
+function updateAdaptiveResolution(delta) {
+  if (isMobile) return;
+
+  frameSamples++;
+  frameTimeTotal += delta;
+  resolutionCheckTime += delta;
+  resolutionCooldown -= delta;
+
+  if (resolutionCheckTime < 1.5 || resolutionCooldown > 0) return;
+
+  const averageFrameTime = frameTimeTotal/frameSamples;
+
+  let nextRatio = currentPixelRatio;
+
+  if (averageFrameTime > 0.027) {
+    nextRatio = Math.max(
+      MIN_PIXEL_RATIO,
+      currentPixelRatio-0.10
+    );
+  } else if (averageFrameTime < 0.019) {
+    nextRatio = Math.min(
+      DESKTOP_PIXEL_RATIO,
+      currentPixelRatio+0.05
+    );
+  }
+
+  if (Math.abs(nextRatio-currentPixelRatio)>0.01) {
+    currentPixelRatio = nextRatio;
+    renderer.setPixelRatio(currentPixelRatio);
+    renderer.setSize(window.innerWidth,window.innerHeight,false);
+
+    console.log(
+      "AFTERHOURS adaptive resolution:",
+      currentPixelRatio.toFixed(2)
+    );
+  }
+
+  resolutionCheckTime = 0;
+  frameSamples = 0;
+  frameTimeTotal = 0;
+  resolutionCooldown = 2;
+}
+
+// ==========================================
+// TEXTURE MEMORY OPTIMIZATION
+// ==========================================
+
+function optimizeTexture(texture,maxDimension=1024) {
+  const image = texture.image;
+
+  if (!image || !image.width || !image.height) return texture;
+
+  if (
+    image.width<=maxDimension &&
+    image.height<=maxDimension
+  ) {
+    texture.anisotropy = Math.min(
+      renderer.capabilities.getMaxAnisotropy(),2
+    );
+    return texture;
+  }
+
+  const scale = Math.min(
+    1,
+    maxDimension/Math.max(image.width,image.height)
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1,Math.round(image.width*scale));
+  canvas.height = Math.max(1,Math.round(image.height*scale));
+
+  const context = canvas.getContext("2d");
+  context.drawImage(image,0,0,canvas.width,canvas.height);
+
+  texture.image = canvas;
+  texture.needsUpdate = true;
+  texture.anisotropy = Math.min(
+    renderer.capabilities.getMaxAnisotropy(),2
+  );
+
+  return texture;
+}
 
 // ==========================================
 // SPACE BACKGROUND
@@ -128,32 +226,31 @@ const planetGlowGeometry = new THREE.SphereGeometry(1.045, 32, 24);
 textureLoader.load(
   "../deep_space_combined_2k.png",
   texture => {
+    optimizeTexture(texture,1024);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.mapping = THREE.EquirectangularReflectionMapping;
     scene.background = texture;
-    console.log("Space background loaded");
+    console.log("Space background loaded and optimized");
   },
   undefined,
-  error => console.error("Space background failed:", error)
+  error=>console.error("Space background failed:",error)
 );
 
 // ==========================================
 // LIGHTING
 // ==========================================
 
-scene.add(new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8));
+scene.add(
+  new THREE.HemisphereLight(0xb9c9d8,0x252a35,1.8)
+);
 
-const sunlight = new THREE.DirectionalLight(0xffffff, 2.2);
-sunlight.position.set(-30, 60, 25);
+const sunlight = new THREE.DirectionalLight(0xffffff,2.2);
+sunlight.position.set(-30,60,25);
 scene.add(sunlight);
 
-const frontLight = new THREE.DirectionalLight(0x9abaff, 1.3);
-frontLight.position.set(20, 12, 40);
+const frontLight = new THREE.DirectionalLight(0x9abaff,1.3);
+frontLight.position.set(20,12,40);
 scene.add(frontLight);
-
-const planetLight = new THREE.PointLight(0x8aaaff, 35, 180);
-planetLight.position.set(0, 35, -100);
-scene.add(planetLight);
 
 // ==========================================
 // PLANET TEXTURES
@@ -182,15 +279,12 @@ for (const [name,path] of Object.entries(planetFiles)) {
   textureLoader.load(
     path,
     texture => {
+      optimizeTexture(texture,1024);
       texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = Math.min(
-        renderer.capabilities.getMaxAnisotropy(), 8
-      );
-
       planetTextures[name] = texture;
 
       for (const planet of roadsidePlanets) {
-        if (planet.userData.type === name) {
+        if (planet.userData.type===name) {
           planet.userData.surface.material.map = texture;
           planet.userData.surface.material.needsUpdate = true;
         }
@@ -199,7 +293,7 @@ for (const [name,path] of Object.entries(planetFiles)) {
       console.log("Planet texture loaded:",name);
     },
     undefined,
-    error => console.error("Planet texture failed:",name,error)
+    error=>console.error("Planet texture failed:",name,error)
   );
 }
 
@@ -209,8 +303,8 @@ for (const [name,path] of Object.entries(planetFiles)) {
 
 function createRoadsidePlanet(side,z,index) {
   const group = new THREE.Group();
-  const radius = 5.5 + Math.random() * 5.5;
-  const type = planetTypes[index % planetTypes.length];
+  const radius = 5.5+Math.random()*5.5;
+  const type = planetTypes[index%planetTypes.length];
 
   const material = new THREE.MeshStandardMaterial({
     color:0xffffff,
@@ -221,7 +315,7 @@ function createRoadsidePlanet(side,z,index) {
 
   const sphere = new THREE.Mesh(planetGeometry,material);
   sphere.scale.setScalar(radius);
-  sphere.rotation.z = Math.random() * Math.PI;
+  sphere.rotation.z = Math.random()*Math.PI;
   group.add(sphere);
 
   const glow = new THREE.Mesh(
@@ -239,15 +333,15 @@ function createRoadsidePlanet(side,z,index) {
   group.add(glow);
 
   group.position.set(
-    side * (23 + Math.random() * 10),
-    8 + Math.random() * 12,
+    side*(23+Math.random()*10),
+    8+Math.random()*12,
     z
   );
 
   group.userData = {
     type,
     surface:sphere,
-    rotationSpeed:0.025 + Math.random() * 0.035,
+    rotationSpeed:0.025+Math.random()*0.035,
     side
   };
 
@@ -256,8 +350,8 @@ function createRoadsidePlanet(side,z,index) {
 }
 
 for (let i=0;i<24;i++) {
-  const side = i % 2 === 0 ? -1 : 1;
-  const z = 100 - Math.floor(i/2)*55;
+  const side = i%2===0?-1:1;
+  const z = 100-Math.floor(i/2)*55;
   roadsidePlanets.push(createRoadsidePlanet(side,z,i));
 }
 
@@ -269,13 +363,13 @@ function changePlanetType(planet) {
   planet.userData.type = nextType;
 
   const material = planet.userData.surface.material;
-  material.map = planetTextures[nextType] || null;
+  material.map = planetTextures[nextType]||null;
   material.color.set(0xffffff);
   material.needsUpdate = true;
 
   planet.children[1].material.color.set(planetColors[nextType]);
 
-  const radius = 5.5 + Math.random()*5.5;
+  const radius = 5.5+Math.random()*5.5;
   planet.userData.surface.scale.setScalar(radius);
   planet.children[1].scale.setScalar(radius*1.045);
 }
@@ -315,7 +409,7 @@ const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
 for (const x of [-1.05,1.05]) {
   for (const z of [-1.35,1.35]) {
     const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42,0.42,0.28,20),
+      new THREE.CylinderGeometry(0.42,0.42,0.28,12),
       wheelMat
     );
     wheel.rotation.z = Math.PI/2;
@@ -347,7 +441,9 @@ gltfLoader.load(
     box.getSize(originalSize);
     box.getCenter(center);
 
-    const longest = Math.max(originalSize.x,originalSize.y,originalSize.z);
+    const longest = Math.max(
+      originalSize.x,originalSize.y,originalSize.z
+    );
 
     if (!longest || !originalSize.y) {
       console.error("Invalid supercar dimensions");
@@ -376,6 +472,7 @@ gltfLoader.load(
     car.add(model);
     supercarModel = model;
     fallback.visible = false;
+
     console.log("AFTERHOURS: Supercar loaded!",originalSize);
   },
   progress => {
@@ -400,6 +497,7 @@ const CASH_MODEL_PATH =
 
 const CASH_VALUE = 100;
 const CASH_COUNT = 18;
+const CASH_RENDER_DISTANCE = 240;
 
 const cashPickups = [];
 let cashTemplate = null;
@@ -415,7 +513,7 @@ function createCashPickup(z,index) {
 
   pickup.position.set(
     randomCashX(),
-    1.4 + Math.random()*2.2,
+    1.4+Math.random()*2.2,
     z
   );
 
@@ -424,7 +522,7 @@ function createCashPickup(z,index) {
   pickup.userData = {
     baseY:pickup.position.y,
     floatOffset:Math.random()*Math.PI*2,
-    spinSpeed:0.35 + Math.random()*0.5,
+    spinSpeed:0.35+Math.random()*0.5,
     index
   };
 
@@ -488,7 +586,7 @@ cashLoader.load(
       )+"%");
     }
   },
-  error => console.error("Cash model failed to load:",error)
+  error=>console.error("Cash model failed to load:",error)
 );
 
 // ==========================================
@@ -499,15 +597,17 @@ const ASTEROID_MODEL_PATH =
   "../assets/planets/asteroid.glb";
 
 const ASTEROID_COUNT = 36;
+const ASTEROID_RENDER_DISTANCE = 280;
+
 const asteroids = [];
 let asteroidTemplate = null;
 
 function randomAsteroidSide() {
-  return Math.random() < 0.5 ? -1 : 1;
+  return Math.random()<0.5?-1:1;
 }
 
 function randomAsteroidX(side) {
-  return side * (9 + Math.random()*12);
+  return side*(9+Math.random()*12);
 }
 
 function createAsteroid(z,index) {
@@ -516,14 +616,14 @@ function createAsteroid(z,index) {
   const asteroid = new THREE.Group();
   asteroid.add(asteroidTemplate.clone(true));
 
-  const size = 1.2 + Math.random()*2.8;
+  const size = 1.2+Math.random()*2.8;
   const side = randomAsteroidSide();
 
   asteroid.scale.setScalar(size);
 
   asteroid.position.set(
     randomAsteroidX(side),
-    1 + Math.random()*15,
+    1+Math.random()*15,
     z
   );
 
@@ -546,7 +646,7 @@ function createAsteroid(z,index) {
 }
 
 function createAsteroidField() {
-  if (!asteroidTemplate || asteroids.length > 0) return;
+  if (!asteroidTemplate || asteroids.length>0) return;
 
   for (let i=0;i<ASTEROID_COUNT;i++) {
     createAsteroid(85-i*26,i);
@@ -607,18 +707,26 @@ asteroidLoader.load(
       )+"%");
     }
   },
-  error => console.error("Asteroid model failed to load:",error)
+  error=>console.error("Asteroid model failed to load:",error)
 );
 
 // ==========================================
-// ASTEROID ROTATION
+// ASTEROID ROTATION + DISTANCE CULLING
 // ==========================================
 
 function updateAsteroids(delta) {
   for (const asteroid of asteroids) {
-    asteroid.rotation.x += asteroid.userData.rotationX*delta;
-    asteroid.rotation.y += asteroid.userData.rotationY*delta;
-    asteroid.rotation.z += asteroid.userData.rotationZ*delta;
+    const distance = Math.abs(
+      asteroid.position.z-car.position.z
+    );
+
+    asteroid.visible = distance<ASTEROID_RENDER_DISTANCE;
+
+    if (asteroid.visible) {
+      asteroid.rotation.x += asteroid.userData.rotationX*delta;
+      asteroid.rotation.y += asteroid.userData.rotationY*delta;
+      asteroid.rotation.z += asteroid.userData.rotationZ*delta;
+    }
   }
 }
 
@@ -627,18 +735,16 @@ function updateAsteroids(delta) {
 // ==========================================
 
 function recycleAsteroids() {
-  if (asteroids.length === 0) return;
+  if (asteroids.length===0) return;
 
   let farthest = Infinity;
 
   for (const item of asteroids) {
-    if (item.position.z < farthest) {
-      farthest = item.position.z;
-    }
+    if (item.position.z<farthest) farthest = item.position.z;
   }
 
   for (const asteroid of asteroids) {
-    if (asteroid.position.z > car.position.z+45) {
+    if (asteroid.position.z>car.position.z+45) {
       const side = randomAsteroidSide();
 
       asteroid.position.set(
@@ -726,15 +832,15 @@ ufoLoader.load(
       )+"%");
     }
   },
-  error => console.error("UFO model failed to load:",error)
+  error=>console.error("UFO model failed to load:",error)
 );
 
 // ==========================================
-// UFO ENERGY BULLET
+// UFO ENERGY BULLETS
 // ==========================================
 
-const bulletCoreGeometry = new THREE.SphereGeometry(0.32,16,12);
-const bulletGlowGeometry = new THREE.SphereGeometry(0.68,16,12);
+const bulletCoreGeometry = new THREE.SphereGeometry(0.32,10,8);
+const bulletGlowGeometry = new THREE.SphereGeometry(0.68,10,8);
 const bulletCoreMaterial = new THREE.MeshBasicMaterial({color:0x36eaff});
 const bulletGlowMaterial = new THREE.MeshBasicMaterial({
   color:0x773cff,
@@ -746,17 +852,13 @@ const bulletGlowMaterial = new THREE.MeshBasicMaterial({
 function createEnergyBullet(origin,target) {
   const bullet = new THREE.Group();
 
-  const core = new THREE.Mesh(
-    bulletCoreGeometry,
-    bulletCoreMaterial
-  );
-  bullet.add(core);
+  bullet.add(new THREE.Mesh(
+    bulletCoreGeometry,bulletCoreMaterial
+  ));
 
-  const glow = new THREE.Mesh(
-    bulletGlowGeometry,
-    bulletGlowMaterial
-  );
-  bullet.add(glow);
+  bullet.add(new THREE.Mesh(
+    bulletGlowGeometry,bulletGlowMaterial
+  ));
 
   const direction = new THREE.Vector3()
     .subVectors(target,origin).normalize();
@@ -781,7 +883,6 @@ function fireUFOBullet() {
   target.y += 0.9;
 
   createEnergyBullet(origin,target);
-  console.log("UFO fired energy bullet!");
 }
 
 function spawnUFO() {
@@ -819,8 +920,6 @@ function removeUFO() {
   ufoSpawnTimer =
     UFO_SPAWN_MIN+
     Math.random()*(UFO_SPAWN_MAX-UFO_SPAWN_MIN);
-
-  console.log("UFO disappeared");
 }
 
 function removeBullet(index) {
@@ -896,7 +995,10 @@ function updateUFO(delta,elapsedTime) {
   for (let i=ufoBullets.length-1;i>=0;i--) {
     const bullet = ufoBullets[i];
 
-    bullet.position.addScaledVector(bullet.userData.velocity,delta);
+    bullet.position.addScaledVector(
+      bullet.userData.velocity,delta
+    );
+
     bullet.userData.life -= delta;
     bullet.rotation.x += delta*5;
     bullet.rotation.y += delta*7;
@@ -943,17 +1045,14 @@ function loadEngineAudio() {
   engineAudioLoading = true;
   engineAudio.src = ENGINE_AUDIO_PATH;
   engineAudio.load();
-
-  console.log("AFTERHOURS: Loading V10 engine audio");
 }
 
-engineAudio.addEventListener("canplay",() => {
+engineAudio.addEventListener("canplay",()=>{
   engineAudioLoaded = true;
   engineAudioLoading = false;
-  console.log("AFTERHOURS: V10 engine audio ready");
 });
 
-engineAudio.addEventListener("error",() => {
+engineAudio.addEventListener("error",()=>{
   engineAudioLoading = false;
   console.error("Engine audio failed:",ENGINE_AUDIO_PATH,engineAudio.error);
 });
@@ -964,11 +1063,11 @@ function startEngineAudio() {
   loadEngineAudio();
   if (!engineAudio.paused) return;
 
-  engineAudio.volume = mobileAutoDrive ? 0.12 : 0.04;
+  engineAudio.volume = mobileAutoDrive?0.12:0.04;
 
-  engineAudio.play().then(() => {
+  engineAudio.play().then(()=>{
     console.log("V10 ENGINE STARTED");
-  }).catch(error => {
+  }).catch(error=>{
     console.warn("Engine audio playback blocked:",error);
   });
 }
@@ -976,15 +1075,15 @@ function startEngineAudio() {
 function updateEngineAudio(delta) {
   if (!started) return;
 
-  const engineActive = mobileAutoDrive || keys.gas;
+  const engineActive = mobileAutoDrive||keys.gas;
 
   const speedRatio = THREE.MathUtils.clamp(
     speed/MAX_SPEED,0,1
   );
 
   const targetVolume = engineActive
-    ? 0.12+speedRatio*0.20
-    : 0;
+    ?0.12+speedRatio*0.20
+    :0;
 
   engineAudio.volume = THREE.MathUtils.lerp(
     engineAudio.volume,targetVolume,Math.min(1,delta*4)
@@ -1041,7 +1140,7 @@ document.body.appendChild(controls);
 
 const brakeButton = controls.querySelector('[data-control="brake"]');
 
-brakeButton.addEventListener("pointerdown",event => {
+brakeButton.addEventListener("pointerdown",event=>{
   event.preventDefault();
   keys.brake = true;
   brakeButton.setPointerCapture?.(event.pointerId);
@@ -1066,7 +1165,7 @@ let steeringPointerId = null;
 let steeringStartX = 0;
 const SWIPE_THRESHOLD = 12;
 
-renderer.domElement.addEventListener("pointerdown",event => {
+renderer.domElement.addEventListener("pointerdown",event=>{
   if (!isMobile || !started) return;
   if (steeringPointerId!==null) return;
 
@@ -1076,7 +1175,7 @@ renderer.domElement.addEventListener("pointerdown",event => {
   renderer.domElement.setPointerCapture?.(event.pointerId);
 });
 
-renderer.domElement.addEventListener("pointermove",event => {
+renderer.domElement.addEventListener("pointermove",event=>{
   if (!isMobile || event.pointerId!==steeringPointerId) return;
 
   const movement = event.clientX-steeringStartX;
@@ -1101,34 +1200,34 @@ renderer.domElement.addEventListener("lostpointercapture",releaseSteering);
 // KEYBOARD CONTROLS — DESKTOP
 // ==========================================
 
-window.addEventListener("keydown",event => {
+window.addEventListener("keydown",event=>{
   const key = event.key.toLowerCase();
 
   if ([
     "arrowleft","arrowright","arrowup","arrowdown"," "
   ].includes(key)) event.preventDefault();
 
-  if (key==="arrowleft" || key==="a") keys.left = true;
-  if (key==="arrowright" || key==="d") keys.right = true;
+  if (key==="arrowleft"||key==="a") keys.left = true;
+  if (key==="arrowright"||key==="d") keys.right = true;
 
-  if (key==="arrowup" || key==="w") {
+  if (key==="arrowup"||key==="w") {
     keys.gas = true;
     startEngineAudio();
   }
 
-  if (key==="arrowdown" || key==="s") keys.brake = true;
+  if (key==="arrowdown"||key==="s") keys.brake = true;
 });
 
-window.addEventListener("keyup",event => {
+window.addEventListener("keyup",event=>{
   const key = event.key.toLowerCase();
 
-  if (key==="arrowleft" || key==="a") keys.left = false;
-  if (key==="arrowright" || key==="d") keys.right = false;
-  if (key==="arrowup" || key==="w") keys.gas = false;
-  if (key==="arrowdown" || key==="s") keys.brake = false;
+  if (key==="arrowleft"||key==="a") keys.left = false;
+  if (key==="arrowright"||key==="d") keys.right = false;
+  if (key==="arrowup"||key==="w") keys.gas = false;
+  if (key==="arrowdown"||key==="s") keys.brake = false;
 });
 
-window.addEventListener("blur",() => {
+window.addEventListener("blur",()=>{
   keys.left = false;
   keys.right = false;
   keys.gas = false;
@@ -1162,20 +1261,20 @@ function startGame() {
     intro.style.transition = "opacity 1s ease";
     intro.style.opacity = "0";
 
-    setTimeout(() => {
+    setTimeout(()=>{
       intro.style.display = "none";
     },1000);
   }
 
   console.log(
     isMobile
-      ? "AFTERHOURS: MOBILE AUTO DRIVE ACTIVATED"
-      : "AFTERHOURS: DESKTOP MANUAL DRIVE ACTIVATED"
+      ?"AFTERHOURS: MOBILE AUTO DRIVE ACTIVATED"
+      :"AFTERHOURS: DESKTOP MANUAL DRIVE ACTIVATED"
   );
 }
 
 const startButton = [...document.querySelectorAll("button")]
-  .find(button => /start engine/i.test(button.textContent.trim()));
+  .find(button=>/start engine/i.test(button.textContent.trim()));
 
 if (startButton) {
   startButton.addEventListener("click",startGame);
@@ -1191,14 +1290,14 @@ if (startButton) {
 function updateDriving(delta) {
   if (!started) return;
 
-  const accelerating = mobileAutoDrive || keys.gas;
+  const accelerating = mobileAutoDrive||keys.gas;
 
-  if (accelerating && !keys.brake) speed += 1.2*delta;
+  if (accelerating&&!keys.brake) speed += 1.2*delta;
   if (keys.brake) speed -= 2.5*delta;
 
   speed -= 0.16*delta;
 
-  const speedMultiplier = speedRecoveryTimer>0 ? 0.45 : 1;
+  const speedMultiplier = speedRecoveryTimer>0?0.45:1;
 
   speed = THREE.MathUtils.clamp(
     speed,0,MAX_SPEED*speedMultiplier
@@ -1252,10 +1351,18 @@ function updateCash(delta,elapsedTime) {
   let farthest = Infinity;
 
   for (const item of cashPickups) {
-    if (item.position.z < farthest) farthest = item.position.z;
+    if (item.position.z<farthest) farthest = item.position.z;
   }
 
   for (const pickup of cashPickups) {
+    const distance = Math.abs(
+      pickup.position.z-car.position.z
+    );
+
+    pickup.visible = distance<CASH_RENDER_DISTANCE;
+
+    if (!pickup.visible) continue;
+
     pickup.rotation.y += pickup.userData.spinSpeed*delta;
 
     pickup.position.y =
@@ -1265,7 +1372,7 @@ function updateCash(delta,elapsedTime) {
     const distanceX = Math.abs(pickup.position.x-car.position.x);
     const distanceZ = Math.abs(pickup.position.z-car.position.z);
 
-    if (distanceX<2.3 && distanceZ<2.8) {
+    if (distanceX<2.3&&distanceZ<2.8) {
       cashTotal += CASH_VALUE;
 
       const cashDisplay = document.querySelector("#ah-cash");
@@ -1304,7 +1411,7 @@ function updateEndlessWorld() {
   let farthest = Infinity;
 
   for (const planet of roadsidePlanets) {
-    if (planet.position.z < farthest) farthest = planet.position.z;
+    if (planet.position.z<farthest) farthest = planet.position.z;
   }
 
   for (const planet of roadsidePlanets) {
@@ -1326,8 +1433,16 @@ function updateEndlessWorld() {
 
 function updatePlanets(delta) {
   for (const planet of roadsidePlanets) {
-    planet.userData.surface.rotation.y +=
-      planet.userData.rotationSpeed*delta;
+    const distance = Math.abs(
+      planet.position.z-car.position.z
+    );
+
+    planet.visible = distance<500;
+
+    if (planet.visible) {
+      planet.userData.surface.rotation.y +=
+        planet.userData.rotationSpeed*delta;
+    }
   }
 }
 
@@ -1359,25 +1474,24 @@ function updateCamera(delta) {
 // RESIZE
 // ==========================================
 
-window.addEventListener("resize",() => {
+window.addEventListener("resize",()=>{
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
-  );
+
+  renderer.setPixelRatio(currentPixelRatio);
 });
 
 // ==========================================
 // ERROR LOGGING
 // ==========================================
 
-window.addEventListener("error",event => {
+window.addEventListener("error",event=>{
   console.error("AFTERHOURS runtime error:",event.message);
 });
 
-window.addEventListener("unhandledrejection",event => {
+window.addEventListener("unhandledrejection",event=>{
   console.error("AFTERHOURS promise error:",event.reason);
 });
 
@@ -1390,8 +1504,11 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
-  const delta = Math.min(clock.getDelta(),0.04);
+  const rawDelta = clock.getDelta();
+  const delta = Math.min(rawDelta,0.04);
   const elapsedTime = clock.elapsedTime;
+
+  updateAdaptiveResolution(rawDelta);
 
   updateDriving(delta);
   updateEngineAudio(delta);
@@ -1412,5 +1529,5 @@ function animate() {
 animate();
 
 console.log(
-  "AFTERHOURS 0.9.12 ORIGINAL GAME + GPU OPTIMIZATION initialized"
+  "AFTERHOURS 0.9.13 PERFORMANCE EDITION initialized"
 );
