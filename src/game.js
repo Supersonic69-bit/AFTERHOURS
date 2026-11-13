@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.2 | SILENT SUPERCAR EDITION
+// BUILD 0.9.3 | SUPERCAR DIRECTION FIX
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -231,11 +231,7 @@ function createRoadSegment(z) {
   group.position.z = z;
 
   const road = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      ROAD_WIDTH,
-      0.18,
-      SEGMENT_LENGTH
-    ),
+    new THREE.BoxGeometry(ROAD_WIDTH, 0.18, SEGMENT_LENGTH),
     asphaltMat
   );
 
@@ -256,12 +252,7 @@ function createRoadSegment(z) {
       curbMat
     );
 
-    curb.position.set(
-      side * (ROAD_WIDTH / 2 + 0.2),
-      0,
-      0
-    );
-
+    curb.position.set(side * (ROAD_WIDTH / 2 + 0.2), 0, 0);
     group.add(curb);
   }
 
@@ -270,9 +261,7 @@ function createRoadSegment(z) {
 }
 
 for (let i = 0; i < SEGMENT_COUNT; i++) {
-  roadSegments.push(
-    createRoadSegment(90 - i * SEGMENT_LENGTH)
-  );
+  roadSegments.push(createRoadSegment(90 - i * SEGMENT_LENGTH));
 }
 
 // ==========================================
@@ -355,9 +344,7 @@ for (let i = 0; i < 24; i++) {
   const side = i % 2 === 0 ? -1 : 1;
   const z = 100 - Math.floor(i / 2) * 55;
 
-  roadsidePlanets.push(
-    createRoadsidePlanet(side, z, i)
-  );
+  roadsidePlanets.push(createRoadsidePlanet(side, z, i));
 }
 
 // ==========================================
@@ -376,9 +363,7 @@ function changePlanetType(planet) {
   material.color.set(0xffffff);
   material.needsUpdate = true;
 
-  planet.children[1].material.color.set(
-    planetColors[nextType]
-  );
+  planet.children[1].material.color.set(planetColors[nextType]);
 
   const radius = 5.5 + Math.random() * 5.5;
 
@@ -394,7 +379,7 @@ const car = new THREE.Group();
 scene.add(car);
 car.position.set(0, 0, 3);
 
-// Temporary fallback while the GLB loads
+// Fallback while GLB loads
 const fallback = new THREE.Group();
 car.add(fallback);
 
@@ -489,8 +474,8 @@ gltfLoader.load(
       -originalCenter.z * scale
     );
 
-    // Rotate the car 90 degrees to align with the road.
-    model.rotation.y = Math.PI / 2;
+    // FIX: Flip the car 180 degrees so its front faces the road.
+    model.rotation.y = -Math.PI / 2;
 
     model.traverse(object => {
       if (object.isMesh) {
@@ -866,4 +851,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.2 initialized");
+console.log("AFTERHOURS 0.9.3 initialized");
