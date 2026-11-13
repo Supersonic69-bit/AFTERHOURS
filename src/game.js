@@ -1,10 +1,10 @@
 
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "https://esm.sh/three@0.160.0";
+import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9 | SUPERCAR EDITION
+// BUILD 0.9.1 | SUPERCAR HOTFIX
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -18,30 +18,36 @@ document.addEventListener("dragstart", e => e.preventDefault());
 const style = document.createElement("style");
 style.textContent = `
 * {
-  -webkit-user-select:none !important;
-  user-select:none !important;
-  -webkit-touch-callout:none !important;
-  -webkit-tap-highlight-color:transparent !important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  -webkit-touch-callout:none!important;
+  -webkit-tap-highlight-color:transparent!important;
 }
 html,body {
   margin:0;padding:0;overflow:hidden;
   background:#03050b;touch-action:manipulation;
 }
 #game {
-  position:fixed;inset:0;overflow:hidden;touch-action:none;
+  position:fixed;inset:0;overflow:hidden;
+  touch-action:none;z-index:1;
 }
 #game canvas {
-  display:block;width:100%;height:100%;touch-action:none;
+  position:absolute;inset:0;
+  display:block;width:100%;height:100%;
+  touch-action:none;z-index:1;
 }
+#intro {z-index:10;}
 #ah-hud,#ah-hud * {
-  pointer-events:none !important;user-select:none !important;
+  pointer-events:none!important;
+  user-select:none!important;
 }
 #ah-controls {pointer-events:none;}
 #ah-controls button {
   pointer-events:auto;min-width:58px;height:58px;
   border:1px solid rgba(255,255,255,.35);
   border-radius:12px;background:rgba(8,12,20,.78);
-  color:white;font-size:14px;font-weight:700;touch-action:none;
+  color:white;font-size:14px;font-weight:700;
+  touch-action:none;
 }
 #ah-controls button:active {
   background:rgba(255,255,255,.25);
@@ -60,17 +66,20 @@ scene.fog = new THREE.Fog(0x111820, 100, 520);
 const camera = new THREE.PerspectiveCamera(
   65, window.innerWidth / window.innerHeight, 0.1, 1400
 );
-camera.position.set(0, 5.5, 11);
+camera.position.set(0, 5.5, 14);
 
 const renderer = new THREE.WebGLRenderer({
   antialias:true,
+  alpha:false,
   powerPreference:"high-performance"
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+
 game.appendChild(renderer.domElement);
 
 // ==========================================
@@ -85,6 +94,7 @@ textureLoader.load(
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.mapping = THREE.EquirectangularReflectionMapping;
     scene.background = texture;
+    console.log("Space background loaded");
   },
   undefined,
   error => console.error("Space background failed:", error)
@@ -139,6 +149,7 @@ for (const [name, path] of Object.entries(planetFiles)) {
       texture.anisotropy = Math.min(
         renderer.capabilities.getMaxAnisotropy(), 8
       );
+
       planetTextures[name] = texture;
 
       for (const planet of roadsidePlanets) {
@@ -160,12 +171,15 @@ for (const [name, path] of Object.entries(planetFiles)) {
 const asphaltMat = new THREE.MeshStandardMaterial({
   color:0x24292d, roughness:0.95
 });
+
 const groundMat = new THREE.MeshStandardMaterial({
   color:0x303b37, roughness:1
 });
+
 const lineMat = new THREE.MeshStandardMaterial({
   color:0xd8d8d2, roughness:0.8
 });
+
 const curbMat = new THREE.MeshStandardMaterial({
   color:0x777b7b, roughness:0.9
 });
@@ -295,6 +309,7 @@ function changePlanetType(planet) {
   ];
 
   planet.userData.type = nextType;
+
   const material = planet.userData.surface.material;
   material.map = planetTextures[nextType] || null;
   material.color.set(0xffffff);
@@ -308,15 +323,14 @@ function changePlanetType(planet) {
 }
 
 // ==========================================
-// PLAYER CAR — REAL 3D SUPERCAR
+// PLAYER CAR
 // ==========================================
 
 const car = new THREE.Group();
 scene.add(car);
-
 car.position.set(0, 0, 3);
 
-// Temporary fallback while GLB loads
+// Fallback car, visible until GLB is loaded
 const fallback = new THREE.Group();
 car.add(fallback);
 
@@ -354,14 +368,19 @@ for (const x of [-1.05, 1.05]) {
   }
 }
 
-let supercarModel = null;
-let modelLoaded = false;
+// ==========================================
+// LOAD THE DOWNLOADED GLB SUPERCAR
+// ==========================================
 
-// IMPORTANT: This matches the current GitHub folder location.
+// Current GitHub path:
+// assets/planets/cars/generic-mid-engine-supercar.glb
+
 const CAR_MODEL_PATH =
   "../assets/planets/cars/generic-mid-engine-supercar.glb";
 
 const gltfLoader = new GLTFLoader();
+
+let supercarModel = null;
 
 gltfLoader.load(
   CAR_MODEL_PATH,
@@ -370,37 +389,42 @@ gltfLoader.load(
 
     model.updateMatrixWorld(true);
 
-    // Measure the imported model and fit it to the road.
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
+    const originalBox = new THREE.Box3().setFromObject(model);
+    const originalSize = new THREE.Vector3();
+    const originalCenter = new THREE.Vector3();
 
-    const horizontalLength = Math.max(size.x, size.z);
-    if (!horizontalLength || !size.y) {
+    originalBox.getSize(originalSize);
+    originalBox.getCenter(originalCenter);
+
+    const longestDimension = Math.max(
+      originalSize.x,
+      originalSize.y,
+      originalSize.z
+    );
+
+    if (!longestDimension || !originalSize.y) {
       console.error("Supercar model has invalid dimensions.");
       return;
     }
 
-    const scale = 4.6 / horizontalLength;
+    const scale = 4.6 / longestDimension;
     model.scale.setScalar(scale);
 
-    // Center the car and place its wheels on the road.
     model.position.set(
-      -center.x * scale,
-      -box.min.y * scale,
-      -center.z * scale
+      -originalCenter.x * scale,
+      -originalBox.min.y * scale,
+      -originalCenter.z * scale
     );
 
-    // Many GLB cars face +Z; our road direction is -Z.
-    // We will verify orientation in the first test.
+    // Default orientation: face the road's forward direction.
     model.rotation.y = Math.PI;
 
     model.traverse(object => {
       if (object.isMesh) {
         object.castShadow = true;
         object.receiveShadow = true;
+        object.frustumCulled = false;
+
         if (object.material) {
           object.material.needsUpdate = true;
         }
@@ -409,10 +433,9 @@ gltfLoader.load(
 
     car.add(model);
     supercarModel = model;
-    modelLoaded = true;
     fallback.visible = false;
 
-    console.log("AFTERHOURS: 3D supercar loaded!", size);
+    console.log("AFTERHOURS: Supercar loaded!", originalSize);
   },
   progress => {
     if (progress.total) {
@@ -423,7 +446,8 @@ gltfLoader.load(
     }
   },
   error => {
-    console.error("Supercar model failed to load:", error);
+    console.error("Supercar failed to load:", error);
+    fallback.visible = true;
   }
 );
 
@@ -445,7 +469,7 @@ const keys = {
 };
 
 // ==========================================
-// ENGINE SOUND — PROCEDURAL V12 STYLE
+// ENGINE SOUND
 // ==========================================
 
 let audioContext = null;
@@ -457,7 +481,7 @@ let engineStarted = false;
 
 function startEngineSound() {
   if (engineStarted) {
-    if (audioContext && audioContext.state === "suspended") {
+    if (audioContext.state === "suspended") {
       audioContext.resume();
     }
     return;
@@ -467,7 +491,7 @@ function startEngineSound() {
     window.AudioContext || window.webkitAudioContext;
 
   if (!AudioContextClass) {
-    console.warn("Web Audio is not supported.");
+    console.warn("Audio not supported by this browser.");
     return;
   }
 
@@ -480,8 +504,9 @@ function startEngineSound() {
 
   engineOscillator.type = "sawtooth";
   engineHarmonic.type = "triangle";
+
   engineFilter.type = "lowpass";
-  engineFilter.frequency.value = 450;
+  engineFilter.frequency.value = 400;
 
   engineOscillator.frequency.value = 48;
   engineHarmonic.frequency.value = 96;
@@ -506,13 +531,8 @@ function updateEngineSound() {
   const now = audioContext.currentTime;
   const rpm = 48 + speed * 105 + (keys.gas ? 28 : 0);
 
-  engineOscillator.frequency.setTargetAtTime(
-    rpm, now, 0.08
-  );
-
-  engineHarmonic.frequency.setTargetAtTime(
-    rpm * 2, now, 0.08
-  );
+  engineOscillator.frequency.setTargetAtTime(rpm, now, 0.08);
+  engineHarmonic.frequency.setTargetAtTime(rpm * 2, now, 0.08);
 
   engineFilter.frequency.setTargetAtTime(
     350 + speed * 500 + (keys.gas ? 250 : 0),
@@ -521,10 +541,7 @@ function updateEngineSound() {
   );
 
   const volume = started ? 0.045 + speed * 0.025 : 0.0001;
-
-  engineGain.gain.setTargetAtTime(
-    volume, now, 0.12
-  );
+  engineGain.gain.setTargetAtTime(volume, now, 0.12);
 }
 
 // ==========================================
@@ -544,9 +561,7 @@ hud.style.cssText = `
 hud.innerHTML = `
   <div style="opacity:.65;font-size:10px">AFTERHOURS</div>
   <div id="ah-speed"
-       style="font-size:30px;font-weight:700;margin-top:5px">
-    000
-  </div>
+       style="font-size:30px;font-weight:700;margin-top:5px">000</div>
   <div style="font-size:9px;opacity:.55">KM/H</div>
 `;
 
@@ -645,17 +660,13 @@ function startGame() {
 
 const startButton = [
   ...document.querySelectorAll("button")
-].find(button =>
-  /start engine/i.test(button.textContent.trim())
-);
+].find(button => /start engine/i.test(button.textContent.trim()));
 
 if (startButton) {
   startButton.addEventListener("click", startGame);
 } else {
   const intro = document.querySelector("#intro");
-  if (intro) {
-    intro.addEventListener("click", startGame, {once:true});
-  }
+  if (intro) intro.addEventListener("click", startGame, {once:true});
 }
 
 // ==========================================
@@ -693,6 +704,7 @@ function updateDriving(delta) {
   }
 
   const speedDisplay = document.querySelector("#ah-speed");
+
   if (speedDisplay) {
     speedDisplay.textContent = String(
       Math.round(speed * 160)
@@ -732,9 +744,8 @@ function updateEndlessWorld() {
       );
 
       planet.position.z = farthest - 55 - Math.random() * 25;
-
-      const side = planet.userData.side;
-      planet.position.x = side * (23 + Math.random() * 10);
+      planet.position.x =
+        planet.userData.side * (23 + Math.random() * 10);
       planet.position.y = 8 + Math.random() * 12;
 
       changePlanetType(planet);
@@ -784,7 +795,19 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+});
+
+// ==========================================
+// ERROR LOGGING
+// ==========================================
+
+window.addEventListener("error", event => {
+  console.error("AFTERHOURS runtime error:", event.message);
+});
+
+window.addEventListener("unhandledrejection", event => {
+  console.error("AFTERHOURS promise error:", event.reason);
 });
 
 // ==========================================
@@ -807,3 +830,5 @@ function animate() {
 }
 
 animate();
+
+console.log("AFTERHOURS 0.9.1 initialized");
