@@ -3,23 +3,27 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 
 // ==========================================
 // AFTERHOURS BY KALYUG
-// BUILD 0.3 - MOBILE CONTROL + DRIFT FIX
+// BUILD 0.4 - STABILITY UPDATE
 // ==========================================
 
-const game = document.getElementById('game');
-
 document.body.style.cssText += `
-  margin:0; overflow:hidden; background:#080808;
-  touch-action:none; user-select:none;
-  -webkit-user-select:none; -webkit-touch-callout:none;
+  margin:0;
+  overflow:hidden;
+  background:#080808;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
 `;
 
 document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('selectstart', e => e.preventDefault());
 
+const game = document.getElementById('game');
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x101214);
-scene.fog = new THREE.Fog(0x101214, 50, 260);
+scene.fog = new THREE.Fog(0x101214, 70, 420);
 
 const camera = new THREE.PerspectiveCamera(
   65, innerWidth / innerHeight, 0.1, 1000
@@ -41,72 +45,112 @@ game.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x303040, 2));
 
-const sun = new THREE.DirectionalLight(0xffffff, 2);
-sun.position.set(-15, 30, 15);
-scene.add(sun);
+const sunlight = new THREE.DirectionalLight(0xffffff, 1.8);
+sunlight.position.set(-15, 30, 15);
+scene.add(sunlight);
 
 // ==========================================
-// WORLD
+// ENDLESS ROAD SYSTEM
 // ==========================================
+
+const SEGMENT_LENGTH = 180;
+const SEGMENT_COUNT = 5;
+
+const segments = [];
 
 const roadMaterial = new THREE.MeshStandardMaterial({
-  color: 0x292929,
+  color: 0x303030,
   roughness: 0.95
 });
 
-const road = new THREE.Mesh(
-  new THREE.PlaneGeometry(18, 5000),
-  roadMaterial
-);
+const groundMaterial = new THREE.MeshStandardMaterial({
+  color: 0x171c1a
+});
 
-road.rotation.x = -Math.PI / 2;
-road.position.z = -2400;
-scene.add(road);
+const lineMaterial = new THREE.MeshBasicMaterial({
+  color: 0xe0e0e0
+});
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(500, 5500),
-  new THREE.MeshStandardMaterial({ color: 0x171c1a })
-);
+function createRoadSegment(z) {
+  const group = new THREE.Group();
 
-ground.rotation.x = -Math.PI / 2;
-ground.position.set(0, -0.08, -2400);
-scene.add(ground);
-
-// ROAD MARKINGS
-
-const markings = new THREE.Group();
-
-for (let z = 35; z > -5000; z -= 12) {
-  const mark = new THREE.Mesh(
-    new THREE.BoxGeometry(0.15, 0.025, 5),
-    new THREE.MeshBasicMaterial({ color: 0xe5e5e5 })
+  const road = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, SEGMENT_LENGTH),
+    roadMaterial
   );
 
-  mark.position.set(0, 0.025, z);
-  markings.add(mark);
+  road.rotation.x = -Math.PI / 2;
+  road.position.y = 0;
+  group.add(road);
+
+  // Ground around road
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(500, SEGMENT_LENGTH),
+    groundMaterial
+  );
+
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.07;
+  group.add(ground);
+
+  // Centre lane markings
+  for (let i = 0; i < 9; i++) {
+    const mark = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.025, 5),
+      lineMaterial
+    );
+
+    mark.position.set(
+      0,
+      0.025,
+      -SEGMENT_LENGTH / 2 + 12 + i * 19
+    );
+
+    group.add(mark);
+  }
+
+  // Roadside lights
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      const zPosition = -65 + i * 100;
+
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.11, 7, 8),
+        new THREE.MeshStandardMaterial({ color: 0x555555 })
+      );
+
+      pole.position.set(side * 11, 3.5, zPosition);
+      group.add(pole);
+
+      const lamp = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xddeeff })
+      );
+
+      lamp.position.set(side * 11, 7, zPosition);
+      group.add(lamp);
+    }
+  }
+
+  group.position.z = z;
+  scene.add(group);
+
+  return group;
 }
 
-scene.add(markings);
+for (let i = 0; i < SEGMENT_COUNT; i++) {
+  segments.push(createRoadSegment(-i * SEGMENT_LENGTH));
+}
 
-// STREET LIGHTS
+function updateEndlessRoad() {
+  for (const segment of segments) {
+    if (segment.position.z > car.position.z + SEGMENT_LENGTH / 2) {
+      const farthest = Math.min(
+        ...segments.map(s => s.position.z)
+      );
 
-for (let z = 20; z > -4800; z -= 50) {
-  for (const x of [-11, 11]) {
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.12, 7, 8),
-      new THREE.MeshStandardMaterial({ color: 0x555555 })
-    );
-
-    pole.position.set(x, 3.5, z);
-    scene.add(pole);
-
-    const lamp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xddeeff })
-    );
-
-    lamp.position.set(x, 7, z);
-    scene.add(lamp);
+      segment.position.z = farthest - SEGMENT_LENGTH;
+    }
   }
 }
 
@@ -116,15 +160,13 @@ for (let z = 20; z > -4800; z -= 50) {
 
 const car = new THREE.Group();
 
-const bodyMaterial = new THREE.MeshStandardMaterial({
-  color: 0x202020,
-  metalness: 0.85,
-  roughness: 0.22
-});
-
 const body = new THREE.Mesh(
   new THREE.BoxGeometry(2, 0.65, 4),
-  bodyMaterial
+  new THREE.MeshStandardMaterial({
+    color: 0x202020,
+    metalness: 0.8,
+    roughness: 0.25
+  })
 );
 
 body.position.y = 0.85;
@@ -134,7 +176,7 @@ const cabin = new THREE.Mesh(
   new THREE.BoxGeometry(1.5, 0.65, 1.8),
   new THREE.MeshStandardMaterial({
     color: 0x101820,
-    metalness: 0.7,
+    metalness: 0.6,
     roughness: 0.2
   })
 );
@@ -142,7 +184,7 @@ const cabin = new THREE.Mesh(
 cabin.position.set(0, 1.4, -0.2);
 car.add(cabin);
 
-// WHEELS
+// Wheels
 
 const wheels = [];
 
@@ -155,12 +197,13 @@ for (const x of [-1.05, 1.05]) {
 
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(x, 0.45, z);
+
     car.add(wheel);
     wheels.push(wheel);
   }
 }
 
-// HEADLIGHTS
+// Headlights
 
 for (const x of [-0.65, 0.65]) {
   const light = new THREE.Mesh(
@@ -176,7 +219,14 @@ car.position.set(0, 0, 3);
 scene.add(car);
 
 // ==========================================
-// DRIVING PHYSICS
+// CAMERA
+// ==========================================
+
+camera.position.set(0, 5.5, 13);
+camera.lookAt(car.position);
+
+// ==========================================
+// CONTROLS
 // ==========================================
 
 const keys = {};
@@ -185,30 +235,13 @@ const touch = {
   left: false,
   right: false,
   gas: false,
-  brake: false,
-  handbrake: false
+  brake: false
 };
-
-let speed = 0;
-let lateralVelocity = 0;
-let steering = 0;
-let driftAmount = 0;
-
-const MAX_SPEED = 65;
-const ACCELERATION = 22;
-const BRAKING = 42;
-const FRICTION = 7;
-const STEERING_POWER = 2.2;
-const NORMAL_GRIP = 5.5;
-const DRIFT_GRIP = 1.15;
 
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
 
-  if ([
-    'ArrowUp', 'ArrowDown',
-    'ArrowLeft', 'ArrowRight', 'Space'
-  ].includes(e.code)) {
+  if (e.code.startsWith('Arrow')) {
     e.preventDefault();
   }
 });
@@ -218,18 +251,35 @@ window.addEventListener('keyup', e => {
 });
 
 window.addEventListener('blur', () => {
-  Object.keys(keys).forEach(key => keys[key] = false);
-  Object.keys(touch).forEach(key => touch[key] = false);
+  Object.keys(keys).forEach(k => keys[k] = false);
+  Object.keys(touch).forEach(k => touch[k] = false);
 });
 
-function updatePhysics(dt) {
-  const gas = keys.KeyW || keys.ArrowUp || touch.gas;
-  const brake = keys.KeyS || keys.ArrowDown || touch.brake;
-  const left = keys.KeyA || keys.ArrowLeft || touch.left;
-  const right = keys.KeyD || keys.ArrowRight || touch.right;
-  const handbrake = keys.Space || touch.handbrake;
+// ==========================================
+// PHYSICS
+// ==========================================
 
-  // ACCELERATION AND BRAKING
+let speed = 0;
+let steering = 0;
+let lateralVelocity = 0;
+
+const MAX_SPEED = 65;
+const ACCELERATION = 22;
+const BRAKING = 42;
+const FRICTION = 7;
+
+function updatePhysics(dt) {
+  const gas =
+    keys.KeyW || keys.ArrowUp || touch.gas;
+
+  const brake =
+    keys.KeyS || keys.ArrowDown || touch.brake;
+
+  const left =
+    keys.KeyA || keys.ArrowLeft || touch.left;
+
+  const right =
+    keys.KeyD || keys.ArrowRight || touch.right;
 
   if (gas) {
     speed += ACCELERATION * dt;
@@ -237,102 +287,64 @@ function updatePhysics(dt) {
     speed -= FRICTION * dt;
   }
 
-  if (brake) speed -= BRAKING * dt;
-  if (handbrake) speed -= 8 * dt;
+  if (brake) {
+    speed -= BRAKING * dt;
+  }
 
   speed = THREE.MathUtils.clamp(speed, 0, MAX_SPEED);
 
-  // STEERING
-
-  const steeringInput =
-    (right ? 1 : 0) - (left ? 1 : 0);
+  const input = (right ? 1 : 0) - (left ? 1 : 0);
 
   steering = THREE.MathUtils.damp(
     steering,
-    steeringInput,
+    input,
     7,
     dt
   );
 
   const speedFactor = 0.2 + speed / MAX_SPEED;
 
-  // DRIFT PHYSICS
+  lateralVelocity +=
+    steering * 1.8 * speedFactor * (speed / 12) * dt;
 
-  const grip = handbrake ? DRIFT_GRIP : NORMAL_GRIP;
-
-  const steeringForce =
-    steering * STEERING_POWER * speedFactor * (speed / 12);
-
-  lateralVelocity += steeringForce * dt;
-
-  if (handbrake && speed > 8) {
-    lateralVelocity += steering * 2.5 * dt;
-  }
-
-  lateralVelocity *= Math.exp(-grip * dt);
-
-  lateralVelocity = THREE.MathUtils.clamp(
-    lateralVelocity, -12, 12
-  );
-
-  driftAmount = THREE.MathUtils.clamp(
-    Math.abs(lateralVelocity) / 12, 0, 1
-  );
+  lateralVelocity *= Math.exp(-7 * dt);
 
   car.position.x += lateralVelocity * dt;
 
   car.position.x = THREE.MathUtils.clamp(
-    car.position.x, -6.8, 6.8
+    car.position.x,
+    -6.8,
+    6.8
   );
-
-  // FORWARD MOVEMENT
 
   car.position.z -= speed * dt;
 
-  // BODY LEAN AND SLIDE
-
-  const targetRotation =
-    -steering * 0.16 - lateralVelocity * 0.025;
-
   car.rotation.y = THREE.MathUtils.damp(
     car.rotation.y,
-    targetRotation,
-    handbrake ? 2.5 : 5,
+    -steering * 0.16,
+    5,
     dt
   );
 
   car.rotation.z = THREE.MathUtils.damp(
     car.rotation.z,
-    -steering * 0.045,
+    -steering * 0.035,
     4,
     dt
   );
 
-  // WHEEL ANIMATION
-
   wheels.forEach(wheel => {
     wheel.rotation.x -= speed * dt;
   });
-
-  // VISUAL DRIFT INDICATOR
-
-  driftLabel.style.opacity = driftAmount > 0.12 ? '1' : '0';
 }
 
 // ==========================================
-// MOBILE HUD
+// HUD - GAMEPLAY ONLY
 // ==========================================
 
 const hudStyle = document.createElement('style');
 
 hudStyle.textContent = `
-  * {
-    -webkit-user-select:none !important;
-    user-select:none !important;
-    -webkit-touch-callout:none !important;
-    -webkit-tap-highlight-color:transparent !important;
-  }
-
   #hud {
     position:fixed;
     inset:0;
@@ -340,6 +352,7 @@ hudStyle.textContent = `
     pointer-events:none;
     font-family:Arial,sans-serif;
     color:white;
+    display:none;
   }
 
   #speedBox {
@@ -347,7 +360,7 @@ hudStyle.textContent = `
     top:20px;
     left:18px;
     background:#080808ee;
-    border:1px solid #b7ff00;
+    border:2px solid #b7ff00;
     border-radius:12px;
     padding:12px 17px;
   }
@@ -366,8 +379,9 @@ hudStyle.textContent = `
 
   .control {
     position:absolute;
-    width:clamp(58px, 18vw, 82px);
-    height:clamp(58px, 18vw, 82px);
+    bottom:25px;
+    width:clamp(60px,18vw,82px);
+    height:clamp(60px,18vw,82px);
     border:2px solid #b7ff00;
     background:#080808ee;
     color:#b7ff00;
@@ -376,72 +390,39 @@ hudStyle.textContent = `
     font-weight:900;
     pointer-events:auto;
     touch-action:none;
-    -webkit-user-select:none;
     user-select:none;
+    -webkit-user-select:none;
     -webkit-touch-callout:none;
     display:flex;
-    align-items:center;
     justify-content:center;
-    outline:none;
-    transition:background .08s, transform .08s;
+    align-items:center;
   }
 
   .control.active {
     background:#b7ff00;
     color:#080808;
-    transform:scale(.92);
   }
 
   #left {
     left:18px;
-    bottom:30px;
   }
 
   #right {
-    left:calc(18px + clamp(58px, 18vw, 82px) + 14px);
-    bottom:30px;
+    left:calc(18px + clamp(60px,18vw,82px) + 14px);
   }
 
   #brake {
-    right:calc(18px + clamp(58px, 18vw, 82px) + 14px);
-    bottom:30px;
+    right:calc(18px + clamp(60px,18vw,82px) + 14px);
   }
 
   #gas {
     right:18px;
-    bottom:30px;
     background:#b7ff00;
     color:#080808;
   }
 
-  #hand {
-    right:18px;
-    bottom:125px;
-    width:60px;
-    height:60px;
-    font-size:11px;
-    letter-spacing:1px;
-  }
-
-  #driftLabel {
-    position:absolute;
-    top:95px;
-    left:20px;
-    color:#b7ff00;
-    font-size:14px;
-    font-weight:900;
-    letter-spacing:3px;
-    opacity:0;
-    transition:opacity .15s;
-  }
-
   @media (orientation:landscape) {
-    #left,#right,#brake,#gas { bottom:18px; }
-    #hand { bottom:110px; }
-  }
-
-  @media (min-width:900px) {
-    .control { opacity:.8; }
+    .control { bottom:15px; }
   }
 `;
 
@@ -456,21 +437,36 @@ hud.innerHTML = `
     <div id="unit">KM/H</div>
   </div>
 
-  <div id="driftLabel">DRIFT MODE</div>
-
-  <button class="control" id="left" aria-label="Steer left">◀</button>
-  <button class="control" id="right" aria-label="Steer right">▶</button>
+  <button class="control" id="left" aria-label="Left">◀</button>
+  <button class="control" id="right" aria-label="Right">▶</button>
   <button class="control" id="brake" aria-label="Brake">▼</button>
   <button class="control" id="gas" aria-label="Accelerate">▲</button>
-  <button class="control" id="hand" aria-label="Handbrake">DRIFT</button>
 `;
 
 document.body.appendChild(hud);
 
-const driftLabel = document.getElementById('driftLabel');
+// ==========================================
+// SHOW CONTROLS ONLY AFTER START ENGINE
+// ==========================================
+
+const startButton = document.getElementById('start');
+const intro = document.getElementById('intro');
+
+hud.style.display = 'none';
+
+if (startButton) {
+  startButton.addEventListener('click', () => {
+    setTimeout(() => {
+      if (intro && intro.style.display !== 'none') return;
+      hud.style.display = 'block';
+    }, 1050);
+  });
+} else {
+  hud.style.display = 'block';
+}
 
 // ==========================================
-// ROBUST MOBILE TOUCH CONTROLS
+// MOBILE BUTTON HANDLING
 // ==========================================
 
 function bindButton(id, property) {
@@ -493,25 +489,18 @@ function bindButton(id, property) {
     } catch (_) {}
   });
 
-  button.addEventListener('pointerup', e => {
-    e.preventDefault();
-    release();
-  });
-
+  button.addEventListener('pointerup', release);
   button.addEventListener('pointercancel', release);
   button.addEventListener('lostpointercapture', release);
 
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
-
-  button.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 bindButton('left', 'left');
 bindButton('right', 'right');
 bindButton('gas', 'gas');
 bindButton('brake', 'brake');
-bindButton('hand', 'handbrake');
 
 // ==========================================
 // CHASE CAMERA
@@ -524,7 +513,7 @@ function updateCamera(dt) {
   cameraPosition.set(
     car.position.x * 0.65,
     5.5,
-    car.position.z + 10
+    car.position.z + 11
   );
 
   camera.position.lerp(
@@ -542,7 +531,7 @@ function updateCamera(dt) {
 }
 
 // ==========================================
-// GAME LOOP
+// MAIN LOOP
 // ==========================================
 
 const speedDisplay = document.getElementById('speed');
@@ -560,6 +549,7 @@ function animate(now) {
   previousTime = now;
 
   updatePhysics(dt);
+  updateEndlessRoad();
   updateCamera(dt);
 
   speedDisplay.textContent = String(
@@ -578,5 +568,6 @@ requestAnimationFrame(animate);
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+
   renderer.setSize(innerWidth, innerHeight);
 });
