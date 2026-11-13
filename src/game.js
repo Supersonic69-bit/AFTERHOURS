@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.3 | SUPERCAR DIRECTION FIX
+// BUILD 0.9.4 | SPACE COLLECTOR BASE
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -190,95 +190,6 @@ for (const [name, path] of Object.entries(planetFiles)) {
     undefined,
     error => console.error("Planet texture failed:", name, error)
   );
-}
-
-// ==========================================
-// ROAD MATERIALS
-// ==========================================
-
-const asphaltMat = new THREE.MeshStandardMaterial({
-  color:0x24292d,
-  roughness:0.95
-});
-
-const groundMat = new THREE.MeshStandardMaterial({
-  color:0x303b37,
-  roughness:1
-});
-
-const lineMat = new THREE.MeshStandardMaterial({
-  color:0xd8d8d2,
-  roughness:0.8
-});
-
-const curbMat = new THREE.MeshStandardMaterial({
-  color:0x777b7b,
-  roughness:0.9
-});
-
-// ==========================================
-// ROAD
-// ==========================================
-
-const ROAD_WIDTH = 14;
-const SEGMENT_LENGTH = 180;
-const SEGMENT_COUNT = 7;
-
-const roadSegments = [];
-
-function createRoadSegment(z) {
-  const group = new THREE.Group();
-  group.position.z = z;
-
-  const road = new THREE.Mesh(
-    new THREE.BoxGeometry(ROAD_WIDTH, 0.18, SEGMENT_LENGTH),
-    asphaltMat
-  );
-
-  road.position.y = -0.12;
-  group.add(road);
-
-  const ground = new THREE.Mesh(
-    new THREE.BoxGeometry(180, 0.1, SEGMENT_LENGTH),
-    groundMat
-  );
-
-  ground.position.y = -0.28;
-  group.add(ground);
-
-  for (const side of [-1, 1]) {
-    const curb = new THREE.Mesh(
-      new THREE.BoxGeometry(0.35, 0.25, SEGMENT_LENGTH),
-      curbMat
-    );
-
-    curb.position.set(side * (ROAD_WIDTH / 2 + 0.2), 0, 0);
-    group.add(curb);
-  }
-
-  scene.add(group);
-  return group;
-}
-
-for (let i = 0; i < SEGMENT_COUNT; i++) {
-  roadSegments.push(createRoadSegment(90 - i * SEGMENT_LENGTH));
-}
-
-// ==========================================
-// ROAD MARKINGS
-// ==========================================
-
-const DASH_SPACING = 18;
-const DASH_COUNT = 100;
-const dashes = [];
-
-const dashGeometry = new THREE.BoxGeometry(0.13, 0.025, 7);
-
-for (let i = 0; i < DASH_COUNT; i++) {
-  const dash = new THREE.Mesh(dashGeometry, lineMat);
-  dash.position.set(0, 0.015, 100 - i * DASH_SPACING);
-  scene.add(dash);
-  dashes.push(dash);
 }
 
 // ==========================================
@@ -474,7 +385,7 @@ gltfLoader.load(
       -originalCenter.z * scale
     );
 
-    // FIX: Flip the car 180 degrees so its front faces the road.
+    // Existing supercar direction preserved
     model.rotation.y = -Math.PI / 2;
 
     model.traverse(object => {
@@ -726,30 +637,10 @@ function updateDriving(delta) {
 }
 
 // ==========================================
-// ENDLESS WORLD
+// ENDLESS SPACE WORLD
 // ==========================================
 
 function updateEndlessWorld() {
-  for (const segment of roadSegments) {
-    if (segment.position.z > car.position.z + SEGMENT_LENGTH) {
-      const farthest = Math.min(
-        ...roadSegments.map(s => s.position.z)
-      );
-
-      segment.position.z = farthest - SEGMENT_LENGTH;
-    }
-  }
-
-  for (const dash of dashes) {
-    if (dash.position.z > car.position.z + 25) {
-      const farthest = Math.min(
-        ...dashes.map(d => d.position.z)
-      );
-
-      dash.position.z = farthest - DASH_SPACING;
-    }
-  }
-
   for (const planet of roadsidePlanets) {
     if (planet.position.z > car.position.z + 35) {
       const farthest = Math.min(
@@ -851,4 +742,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.3 initialized");
+console.log("AFTERHOURS 0.9.4 SPACE COLLECTOR initialized");
