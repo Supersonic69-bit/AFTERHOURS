@@ -3,17 +3,15 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.7 | NASA SPACE EDITION
+// BUILD 0.8 | PLANET EDITION
 // ==========================================
 
 const game = document.querySelector("#game");
-
 if (!game) throw new Error("Missing #game element");
-
 game.innerHTML = "";
 
 // ==========================================
-// IPHONE SELECTION PROTECTION
+// IPHONE PROTECTION
 // ==========================================
 
 document.addEventListener("contextmenu", e => e.preventDefault());
@@ -29,7 +27,6 @@ style.textContent = `
   -webkit-touch-callout:none !important;
   -webkit-tap-highlight-color:transparent !important;
 }
-
 html,body {
   margin:0;
   padding:0;
@@ -37,32 +34,25 @@ html,body {
   background:#03050b;
   touch-action:manipulation;
 }
-
 #game {
   position:fixed;
   inset:0;
   overflow:hidden;
   touch-action:none;
 }
-
 #game canvas {
   display:block;
   width:100%;
   height:100%;
   touch-action:none;
 }
-
 #ah-hud,#ah-hud * {
   pointer-events:none !important;
-  -webkit-user-select:none !important;
   user-select:none !important;
-  -webkit-touch-callout:none !important;
 }
-
 #ah-controls {
   pointer-events:none;
 }
-
 #ah-controls button {
   pointer-events:auto;
   min-width:58px;
@@ -74,11 +64,7 @@ html,body {
   font-size:14px;
   font-weight:700;
   touch-action:none;
-  -webkit-user-select:none !important;
-  user-select:none !important;
-  -webkit-touch-callout:none !important;
 }
-
 #ah-controls button:active {
   background:rgba(255,255,255,.25);
 }
@@ -91,15 +77,14 @@ document.head.appendChild(style);
 // ==========================================
 
 const scene = new THREE.Scene();
-
 scene.background = new THREE.Color(0x03050b);
-scene.fog = new THREE.Fog(0x111820, 100, 440);
+scene.fog = new THREE.Fog(0x111820, 100, 520);
 
 const camera = new THREE.PerspectiveCamera(
   65,
   window.innerWidth / window.innerHeight,
   0.1,
-  1200
+  1400
 );
 
 camera.position.set(0, 5.5, 11);
@@ -116,46 +101,75 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 game.appendChild(renderer.domElement);
 
 // ==========================================
-// NASA SPACE BACKGROUND
-// Image is in repository root.
-// game.js is inside src/.
+// SPACE BACKGROUND
 // ==========================================
 
 const textureLoader = new THREE.TextureLoader();
 
 textureLoader.load(
   "../deep_space_combined_2k.png",
-
   texture => {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.mapping = THREE.EquirectangularReflectionMapping;
-    texture.needsUpdate = true;
-
     scene.background = texture;
-    scene.backgroundIntensity = 0.85;
-
     console.log("AFTERHOURS: Space background loaded.");
   },
-
   undefined,
-
-  error => {
-    console.error("Space texture failed to load:", error);
-    scene.background = new THREE.Color(0x03050b);
-  }
+  error => console.error("Space background failed:", error)
 );
 
 // ==========================================
 // LIGHTING
 // ==========================================
 
-scene.add(
-  new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8)
-);
+scene.add(new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8));
 
-const sunlight = new THREE.DirectionalLight(0xffffff, 1.8);
+const sunlight = new THREE.DirectionalLight(0xffffff, 2.0);
 sunlight.position.set(-30, 60, 25);
 scene.add(sunlight);
+
+const planetLight = new THREE.PointLight(0x8aaaff, 35, 180);
+planetLight.position.set(0, 35, -100);
+scene.add(planetLight);
+
+// ==========================================
+// PLANET TEXTURES
+// ==========================================
+
+const planetTextures = {};
+
+const planetFiles = {
+  earth: "../assets/planets/2k_earth_daymap.jpg",
+  jupiter: "../assets/planets/2k_jupiter.jpg",
+  moon: "../assets/planets/2k_moon.jpg",
+  venus: "../assets/planets/2k_venus_surface.jpg"
+};
+
+for (const [name, path] of Object.entries(planetFiles)) {
+  textureLoader.load(
+    path,
+    texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(
+        renderer.capabilities.getMaxAnisotropy(),
+        8
+      );
+
+      planetTextures[name] = texture;
+
+      for (const planet of roadsidePlanets) {
+        if (planet.userData.type === name) {
+          planet.userData.surface.material.map = texture;
+          planet.userData.surface.material.needsUpdate = true;
+        }
+      }
+
+      console.log("Planet texture loaded:", name);
+    },
+    undefined,
+    error => console.error("Planet texture failed:", name, error)
+  );
+}
 
 // ==========================================
 // MATERIALS
@@ -196,11 +210,7 @@ function createRoadSegment(z) {
   group.position.z = z;
 
   const road = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      ROAD_WIDTH,
-      0.18,
-      SEGMENT_LENGTH
-    ),
+    new THREE.BoxGeometry(ROAD_WIDTH, 0.18, SEGMENT_LENGTH),
     asphaltMat
   );
 
@@ -208,33 +218,20 @@ function createRoadSegment(z) {
   group.add(road);
 
   const ground = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      180,
-      0.1,
-      SEGMENT_LENGTH
-    ),
+    new THREE.BoxGeometry(180, 0.1, SEGMENT_LENGTH),
     groundMat
   );
 
   ground.position.y = -0.28;
   group.add(ground);
 
-  for (const side of [-1,1]) {
+  for (const side of [-1, 1]) {
     const curb = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.35,
-        0.25,
-        SEGMENT_LENGTH
-      ),
+      new THREE.BoxGeometry(0.35, 0.25, SEGMENT_LENGTH),
       curbMat
     );
 
-    curb.position.set(
-      side * (ROAD_WIDTH / 2 + 0.2),
-      0,
-      0
-    );
-
+    curb.position.set(side * (ROAD_WIDTH / 2 + 0.2), 0, 0);
     group.add(curb);
   }
 
@@ -243,9 +240,7 @@ function createRoadSegment(z) {
 }
 
 for (let i = 0; i < SEGMENT_COUNT; i++) {
-  roadSegments.push(
-    createRoadSegment(90 - i * SEGMENT_LENGTH)
-  );
+  roadSegments.push(createRoadSegment(90 - i * SEGMENT_LENGTH));
 }
 
 // ==========================================
@@ -256,92 +251,120 @@ const DASH_SPACING = 18;
 const DASH_COUNT = 100;
 const dashes = [];
 
-const dashGeometry = new THREE.BoxGeometry(
-  0.13,
-  0.025,
-  7
-);
+const dashGeometry = new THREE.BoxGeometry(0.13, 0.025, 7);
 
 for (let i = 0; i < DASH_COUNT; i++) {
   const dash = new THREE.Mesh(dashGeometry, lineMat);
-
-  dash.position.set(
-    0,
-    0.015,
-    100 - i * DASH_SPACING
-  );
-
+  dash.position.set(0, 0.015, 100 - i * DASH_SPACING);
   scene.add(dash);
   dashes.push(dash);
 }
 
 // ==========================================
-// ROADSIDE BUILDINGS
+// 3D PLANETS — REPLACES BUILDINGS
 // ==========================================
 
-const roadsideObjects = [];
+const roadsidePlanets = [];
 
-const buildingMaterials = [
-  new THREE.MeshStandardMaterial({color:0x35423b}),
-  new THREE.MeshStandardMaterial({color:0x454a49}),
-  new THREE.MeshStandardMaterial({color:0x303a43}),
-  new THREE.MeshStandardMaterial({color:0x55534c})
-];
+const planetTypes = ["earth", "jupiter", "moon", "venus"];
 
-function createRoadsideObject(side,z) {
+const planetColors = {
+  earth: 0x4b91cf,
+  jupiter: 0xc99b68,
+  moon: 0xb9b9b9,
+  venus: 0xd99a48
+};
+
+function createRoadsidePlanet(side, z, index) {
   const group = new THREE.Group();
 
+  const radius = 5.5 + Math.random() * 5.5;
+
+  const type = planetTypes[index % planetTypes.length];
+
+  const material = new THREE.MeshStandardMaterial({
+    color:0xffffff,
+    roughness:0.95,
+    metalness:0
+  });
+
+  if (planetTextures[type]) {
+    material.map = planetTextures[type];
+  }
+
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 40, 32),
+    material
+  );
+
+  sphere.scale.setScalar(radius);
+  sphere.rotation.z = Math.random() * Math.PI;
+  group.add(sphere);
+
+  // Subtle atmospheric glow
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(1.045, 32, 24),
+    new THREE.MeshBasicMaterial({
+      color:planetColors[type],
+      transparent:true,
+      opacity:0.10,
+      side:THREE.BackSide,
+      depthWrite:false
+    })
+  );
+
+  glow.scale.setScalar(radius);
+  group.add(glow);
+
   group.position.set(
-    side * (10 + Math.random() * 8),
-    0,
+    side * (23 + Math.random() * 10),
+    8 + Math.random() * 12,
     z
   );
 
-  const height = 3 + Math.random() * 9;
-  const width = 2 + Math.random() * 4;
-
-  const building = new THREE.Mesh(
-    new THREE.BoxGeometry(width,height,width),
-    buildingMaterials[
-      Math.floor(Math.random() * buildingMaterials.length)
-    ]
-  );
-
-  building.position.y = height / 2 - 0.2;
-  group.add(building);
-
-  const windowMat = new THREE.MeshStandardMaterial({
-    color:0x9b9b85,
-    emissive:0x29271c,
-    emissiveIntensity:0.35
-  });
-
-  for (let i = 0; i < 3; i++) {
-    const windowMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.45,0.5,0.04),
-      windowMat
-    );
-
-    windowMesh.position.set(
-      0,
-      1 + i * 1.5,
-      width / 2 + 0.025
-    );
-
-    group.add(windowMesh);
-  }
+  group.userData = {
+    type,
+    surface:sphere,
+    rotationSpeed:0.025 + Math.random() * 0.035,
+    side
+  };
 
   scene.add(group);
   return group;
 }
 
-for (let i = 0; i < 42; i++) {
+for (let i = 0; i < 24; i++) {
   const side = i % 2 === 0 ? -1 : 1;
-  const z = 100 - Math.floor(i / 2) * 45;
+  const z = 100 - Math.floor(i / 2) * 55;
 
-  roadsideObjects.push(
-    createRoadsideObject(side,z)
+  roadsidePlanets.push(
+    createRoadsidePlanet(side, z, i)
   );
+}
+
+// ==========================================
+// CHANGE PLANET WHEN RECYCLING
+// ==========================================
+
+function changePlanetType(planet) {
+  const nextType = planetTypes[
+    Math.floor(Math.random() * planetTypes.length)
+  ];
+
+  planet.userData.type = nextType;
+
+  const material = planet.userData.surface.material;
+  material.map = planetTextures[nextType] || null;
+  material.color.set(0xffffff);
+  material.needsUpdate = true;
+
+  planet.children[1].material.color.set(
+    planetColors[nextType]
+  );
+
+  const radius = 5.5 + Math.random() * 5.5;
+  planet.userData.surface.scale.setScalar(radius);
+  planet.children[1].scale.setScalar(radius * 1.045);
 }
 
 // ==========================================
@@ -364,7 +387,7 @@ const glassMat = new THREE.MeshStandardMaterial({
 });
 
 const body = new THREE.Mesh(
-  new THREE.BoxGeometry(2,0.65,4.2),
+  new THREE.BoxGeometry(2, 0.65, 4.2),
   bodyMat
 );
 
@@ -372,11 +395,11 @@ body.position.y = 0.75;
 car.add(body);
 
 const cabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1.55,0.65,1.9),
+  new THREE.BoxGeometry(1.55, 0.65, 1.9),
   glassMat
 );
 
-cabin.position.set(0,1.35,-0.25);
+cabin.position.set(0, 1.35, -0.25);
 car.add(cabin);
 
 const wheelMat = new THREE.MeshStandardMaterial({
@@ -386,15 +409,15 @@ const wheelMat = new THREE.MeshStandardMaterial({
 
 const wheels = [];
 
-for (const x of [-1.05,1.05]) {
-  for (const z of [-1.35,1.35]) {
+for (const x of [-1.05, 1.05]) {
+  for (const z of [-1.35, 1.35]) {
     const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42,0.42,0.28,20),
+      new THREE.CylinderGeometry(0.42, 0.42, 0.28, 20),
       wheelMat
     );
 
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x,0.43,z);
+    wheel.position.set(x, 0.43, z);
     car.add(wheel);
     wheels.push(wheel);
   }
@@ -406,17 +429,17 @@ const headlightMat = new THREE.MeshStandardMaterial({
   emissiveIntensity:1.2
 });
 
-for (const x of [-0.65,0.65]) {
+for (const x of [-0.65, 0.65]) {
   const light = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35,0.16,0.06),
+    new THREE.BoxGeometry(0.35, 0.16, 0.06),
     headlightMat
   );
 
-  light.position.set(x,0.85,-2.12);
+  light.position.set(x, 0.85, -2.12);
   car.add(light);
 }
 
-car.position.set(0,0,3);
+car.position.set(0, 0, 3);
 
 // ==========================================
 // GAME STATE
@@ -490,7 +513,6 @@ controls.innerHTML = `
     <button data-control="left">◀</button>
     <button data-control="right">▶</button>
   </div>
-
   <div style="display:flex;gap:12px">
     <button data-control="brake">BRAKE</button>
     <button data-control="gas">GAS</button>
@@ -502,7 +524,7 @@ document.body.appendChild(controls);
 controls.querySelectorAll("button").forEach(button => {
   const name = button.dataset.control;
 
-  button.addEventListener("pointerdown",event => {
+  button.addEventListener("pointerdown", event => {
     event.preventDefault();
     keys[name] = true;
   });
@@ -512,16 +534,16 @@ controls.querySelectorAll("button").forEach(button => {
     keys[name] = false;
   };
 
-  button.addEventListener("pointerup",release);
-  button.addEventListener("pointerleave",release);
-  button.addEventListener("pointercancel",release);
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointerleave", release);
+  button.addEventListener("pointercancel", release);
 });
 
 // ==========================================
 // KEYBOARD CONTROLS
 // ==========================================
 
-window.addEventListener("keydown",event => {
+window.addEventListener("keydown", event => {
   const key = event.key.toLowerCase();
 
   if (key === "arrowleft" || key === "a") keys.left = true;
@@ -530,7 +552,7 @@ window.addEventListener("keydown",event => {
   if (key === "arrowdown" || key === "s") keys.brake = true;
 });
 
-window.addEventListener("keyup",event => {
+window.addEventListener("keyup", event => {
   const key = event.key.toLowerCase();
 
   if (key === "arrowleft" || key === "a") keys.left = false;
@@ -547,7 +569,6 @@ function startGame() {
   if (started) return;
 
   started = true;
-
   hud.style.display = "block";
   controls.style.display = "flex";
 
@@ -559,7 +580,7 @@ function startGame() {
 
     setTimeout(() => {
       intro.style.display = "none";
-    },1000);
+    }, 1000);
   }
 }
 
@@ -570,16 +591,12 @@ const startButton = [
 );
 
 if (startButton) {
-  startButton.addEventListener("click",startGame);
+  startButton.addEventListener("click", startGame);
 } else {
   const intro = document.querySelector("#intro");
 
   if (intro) {
-    intro.addEventListener(
-      "click",
-      startGame,
-      {once:true}
-    );
+    intro.addEventListener("click", startGame, {once:true});
   }
 }
 
@@ -595,11 +612,7 @@ function updateDriving(delta) {
 
   speed -= 0.16 * delta;
 
-  speed = THREE.MathUtils.clamp(
-    speed,
-    0,
-    MAX_SPEED
-  );
+  speed = THREE.MathUtils.clamp(speed, 0, MAX_SPEED);
 
   let direction = 0;
 
@@ -609,11 +622,10 @@ function updateDriving(delta) {
   steering = THREE.MathUtils.lerp(
     steering,
     direction,
-    Math.min(1,delta * 5)
+    Math.min(1, delta * 5)
   );
 
-  car.position.x +=
-    steering * (0.08 + speed * 0.11);
+  car.position.x += steering * (0.08 + speed * 0.11);
 
   car.position.x = THREE.MathUtils.clamp(
     car.position.x,
@@ -638,7 +650,7 @@ function updateDriving(delta) {
   if (speedDisplay) {
     speedDisplay.textContent = String(
       Math.round(speed * 160)
-    ).padStart(3,"0");
+    ).padStart(3, "0");
   }
 }
 
@@ -667,19 +679,35 @@ function updateEndlessWorld() {
     }
   }
 
-  for (const object of roadsideObjects) {
-    if (object.position.z > car.position.z + 35) {
+  for (const planet of roadsidePlanets) {
+    if (planet.position.z > car.position.z + 35) {
       const farthest = Math.min(
-        ...roadsideObjects.map(o => o.position.z)
+        ...roadsidePlanets.map(p => p.position.z)
       );
 
-      object.position.z =
-        farthest - 40 - Math.random() * 35;
+      planet.position.z =
+        farthest - 55 - Math.random() * 25;
 
-      object.position.x =
-        (object.position.x < 0 ? -1 : 1) *
-        (10 + Math.random() * 8);
+      const side = planet.userData.side;
+
+      planet.position.x =
+        side * (23 + Math.random() * 10);
+
+      planet.position.y = 8 + Math.random() * 12;
+
+      changePlanetType(planet);
     }
+  }
+}
+
+// ==========================================
+// PLANET ROTATION
+// ==========================================
+
+function updatePlanets(delta) {
+  for (const planet of roadsidePlanets) {
+    planet.userData.surface.rotation.y +=
+      planet.userData.rotationSpeed * delta;
   }
 }
 
@@ -696,7 +724,7 @@ function updateCamera(delta) {
 
   camera.position.lerp(
     targetPosition,
-    Math.min(1,delta * 3)
+    Math.min(1, delta * 3)
   );
 
   camera.lookAt(
@@ -710,20 +738,12 @@ function updateCamera(delta) {
 // RESIZE
 // ==========================================
 
-window.addEventListener("resize",() => {
-  camera.aspect =
-    window.innerWidth / window.innerHeight;
-
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
-
-  renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio,1.7)
-  );
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
 });
 
 // ==========================================
@@ -735,13 +755,14 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
-  const delta = Math.min(clock.getDelta(),0.04);
+  const delta = Math.min(clock.getDelta(), 0.04);
 
   updateDriving(delta);
   updateEndlessWorld();
+  updatePlanets(delta);
   updateCamera(delta);
 
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
 
 animate();
