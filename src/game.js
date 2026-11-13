@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.13 | PERFORMANCE EDITION
+// BUILD 0.9.14 | ASTEROID-FREE PERFORMANCE
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -123,7 +123,6 @@ game.appendChild(renderer.domElement);
 const textureLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 
-// Shared, lower-polygon planet geometry.
 const planetGeometry = new THREE.SphereGeometry(1,24,18);
 const planetGlowGeometry = new THREE.SphereGeometry(1.045,16,12);
 
@@ -298,7 +297,7 @@ for (const [name,path] of Object.entries(planetFiles)) {
 }
 
 // ==========================================
-// PLANETS — ORIGINAL COUNT: 24
+// PLANETS — 24
 // ==========================================
 
 function createRoadsidePlanet(side,z,index) {
@@ -489,7 +488,7 @@ gltfLoader.load(
 );
 
 // ==========================================
-// SPACE CASH SYSTEM — ORIGINAL COUNT: 18
+// SPACE CASH SYSTEM — 18
 // ==========================================
 
 const CASH_MODEL_PATH =
@@ -588,177 +587,6 @@ cashLoader.load(
   },
   error=>console.error("Cash model failed to load:",error)
 );
-
-// ==========================================
-// ASTEROID FIELD — ORIGINAL COUNT: 36
-// ==========================================
-
-const ASTEROID_MODEL_PATH =
-  "../assets/planets/asteroid.glb";
-
-const ASTEROID_COUNT = 36;
-const ASTEROID_RENDER_DISTANCE = 280;
-
-const asteroids = [];
-let asteroidTemplate = null;
-
-function randomAsteroidSide() {
-  return Math.random()<0.5?-1:1;
-}
-
-function randomAsteroidX(side) {
-  return side*(9+Math.random()*12);
-}
-
-function createAsteroid(z,index) {
-  if (!asteroidTemplate) return;
-
-  const asteroid = new THREE.Group();
-  asteroid.add(asteroidTemplate.clone(true));
-
-  const size = 1.2+Math.random()*2.8;
-  const side = randomAsteroidSide();
-
-  asteroid.scale.setScalar(size);
-
-  asteroid.position.set(
-    randomAsteroidX(side),
-    1+Math.random()*15,
-    z
-  );
-
-  asteroid.rotation.set(
-    Math.random()*Math.PI,
-    Math.random()*Math.PI,
-    Math.random()*Math.PI
-  );
-
-  asteroid.userData = {
-    side,
-    index,
-    rotationX:(Math.random()-0.5)*0.35,
-    rotationY:(Math.random()-0.5)*0.45,
-    rotationZ:(Math.random()-0.5)*0.25
-  };
-
-  scene.add(asteroid);
-  asteroids.push(asteroid);
-}
-
-function createAsteroidField() {
-  if (!asteroidTemplate || asteroids.length>0) return;
-
-  for (let i=0;i<ASTEROID_COUNT;i++) {
-    createAsteroid(85-i*26,i);
-  }
-
-  console.log("AFTERHOURS: Asteroid field created!");
-}
-
-const asteroidLoader = new GLTFLoader();
-
-asteroidLoader.load(
-  ASTEROID_MODEL_PATH,
-  gltf => {
-    const model = gltf.scene;
-    model.updateMatrixWorld(true);
-
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-
-    box.getSize(size);
-    box.getCenter(center);
-
-    const longest = Math.max(size.x,size.y,size.z);
-
-    if (!longest) {
-      console.error("Invalid asteroid model dimensions");
-      return;
-    }
-
-    const normalizeScale = 1/longest;
-    model.scale.setScalar(normalizeScale);
-
-    model.position.set(
-      -center.x*normalizeScale,
-      -center.y*normalizeScale,
-      -center.z*normalizeScale
-    );
-
-    model.traverse(object => {
-      if (object.isMesh) {
-        object.frustumCulled = true;
-        object.castShadow = false;
-        object.receiveShadow = false;
-      }
-    });
-
-    asteroidTemplate = new THREE.Group();
-    asteroidTemplate.add(model);
-
-    createAsteroidField();
-    console.log("AFTERHOURS: Asteroid GLB loaded!",size);
-  },
-  progress => {
-    if (progress.total) {
-      console.log("Asteroid loading:",Math.round(
-        progress.loaded/progress.total*100
-      )+"%");
-    }
-  },
-  error=>console.error("Asteroid model failed to load:",error)
-);
-
-// ==========================================
-// ASTEROID ROTATION + DISTANCE CULLING
-// ==========================================
-
-function updateAsteroids(delta) {
-  for (const asteroid of asteroids) {
-    const distance = Math.abs(
-      asteroid.position.z-car.position.z
-    );
-
-    asteroid.visible = distance<ASTEROID_RENDER_DISTANCE;
-
-    if (asteroid.visible) {
-      asteroid.rotation.x += asteroid.userData.rotationX*delta;
-      asteroid.rotation.y += asteroid.userData.rotationY*delta;
-      asteroid.rotation.z += asteroid.userData.rotationZ*delta;
-    }
-  }
-}
-
-// ==========================================
-// ASTEROID ENDLESS RECYCLING
-// ==========================================
-
-function recycleAsteroids() {
-  if (asteroids.length===0) return;
-
-  let farthest = Infinity;
-
-  for (const item of asteroids) {
-    if (item.position.z<farthest) farthest = item.position.z;
-  }
-
-  for (const asteroid of asteroids) {
-    if (asteroid.position.z>car.position.z+45) {
-      const side = randomAsteroidSide();
-
-      asteroid.position.set(
-        randomAsteroidX(side),
-        1+Math.random()*15,
-        farthest-26-Math.random()*25
-      );
-
-      asteroid.scale.setScalar(1.2+Math.random()*2.8);
-      asteroid.userData.side = side;
-      farthest = asteroid.position.z;
-    }
-  }
-}
 
 // ==========================================
 // UFO ASSAULT SYSTEM
@@ -1516,9 +1344,6 @@ function animate() {
   updateEndlessWorld();
   updatePlanets(delta);
 
-  updateAsteroids(delta);
-  recycleAsteroids();
-
   updateCash(delta,elapsedTime);
   updateUFO(delta,elapsedTime);
   updateCamera(delta);
@@ -1529,5 +1354,5 @@ function animate() {
 animate();
 
 console.log(
-  "AFTERHOURS 0.9.13 PERFORMANCE EDITION initialized"
+  "AFTERHOURS 0.9.14 ASTEROID-FREE initialized"
 );
