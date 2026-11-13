@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.5 | SPACE CASH COLLECTOR
+// BUILD 0.9.6 | UFO ASSAULT
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -207,9 +207,7 @@ function createRoadsidePlanet(side, z, index) {
     roughness:0.95
   });
 
-  if (planetTextures[type]) {
-    material.map = planetTextures[type];
-  }
+  if (planetTextures[type]) material.map = planetTextures[type];
 
   const sphere = new THREE.Mesh(
     new THREE.SphereGeometry(1, 40, 32),
@@ -254,7 +252,6 @@ function createRoadsidePlanet(side, z, index) {
 for (let i = 0; i < 24; i++) {
   const side = i % 2 === 0 ? -1 : 1;
   const z = 100 - Math.floor(i / 2) * 55;
-
   roadsidePlanets.push(createRoadsidePlanet(side, z, i));
 }
 
@@ -319,9 +316,7 @@ fallback.add(fallbackCabin);
 
 const fallbackWheels = [];
 
-const wheelMat = new THREE.MeshStandardMaterial({
-  color:0x080808
-});
+const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
 
 for (const x of [-1.05, 1.05]) {
   for (const z of [-1.35, 1.35]) {
@@ -350,7 +345,6 @@ let supercarModel = null;
 
 gltfLoader.load(
   CAR_MODEL_PATH,
-
   gltf => {
     const model = gltf.scene;
 
@@ -392,9 +386,7 @@ gltfLoader.load(
         object.receiveShadow = true;
         object.frustumCulled = false;
 
-        if (object.material) {
-          object.material.needsUpdate = true;
-        }
+        if (object.material) object.material.needsUpdate = true;
       }
     });
 
@@ -404,7 +396,6 @@ gltfLoader.load(
 
     console.log("AFTERHOURS: Supercar loaded!", originalSize);
   },
-
   progress => {
     if (progress.total) {
       console.log(
@@ -413,7 +404,6 @@ gltfLoader.load(
       );
     }
   },
-
   error => {
     console.error("Supercar failed to load:", error);
     fallback.visible = true;
@@ -441,7 +431,6 @@ function randomCashX() {
 
 function createCashPickup(z, index) {
   const pickup = new THREE.Group();
-
   const model = cashTemplate.clone(true);
 
   pickup.add(model);
@@ -477,7 +466,6 @@ const cashLoader = new GLTFLoader();
 
 cashLoader.load(
   CASH_MODEL_PATH,
-
   gltf => {
     const model = gltf.scene;
 
@@ -490,11 +478,7 @@ cashLoader.load(
     box.getSize(size);
     box.getCenter(center);
 
-    const longestDimension = Math.max(
-      size.x,
-      size.y,
-      size.z
-    );
+    const longestDimension = Math.max(size.x, size.y, size.z);
 
     if (!longestDimension) {
       console.error("Invalid cash model dimensions");
@@ -524,7 +508,6 @@ cashLoader.load(
 
     console.log("AFTERHOURS: Cash model loaded!", size);
   },
-
   progress => {
     if (progress.total) {
       console.log(
@@ -533,11 +516,348 @@ cashLoader.load(
       );
     }
   },
+  error => console.error("Cash model failed to load:", error)
+);
+
+// ==========================================
+// UFO ASSAULT SYSTEM
+// ==========================================
+
+const UFO_MODEL_PATH = "../assets/planets/ufo.glb";
+
+let ufoTemplate = null;
+let activeUFO = null;
+
+const ufoBullets = [];
+
+let nextUfoSpawn = 0;
+let ufoSpawnTimer = 9;
+let ufoAttackTimer = 0;
+let ufoLifetime = 0;
+
+let speedRecoveryTimer = 0;
+let speedHitCooldown = 0;
+
+const UFO_ACTIVE_TIME = 8;
+const UFO_SPAWN_MIN = 10;
+const UFO_SPAWN_MAX = 17;
+const UFO_BULLET_SPEED = 55;
+const UFO_SPEED_PENALTY = 0.45;
+const UFO_PENALTY_TIME = 3;
+
+// Load the actual UFO asset from GitHub.
+const ufoLoader = new GLTFLoader();
+
+ufoLoader.load(
+  UFO_MODEL_PATH,
+
+  gltf => {
+    const model = gltf.scene;
+
+    model.updateMatrixWorld(true);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(center);
+
+    const longestDimension = Math.max(size.x, size.y, size.z);
+
+    if (!longestDimension) {
+      console.error("Invalid UFO model dimensions");
+      return;
+    }
+
+    // Normalize the UFO to a visible game size.
+    const scale = 6 / longestDimension;
+
+    model.scale.setScalar(scale);
+
+    model.position.set(
+      -center.x * scale,
+      -center.y * scale,
+      -center.z * scale
+    );
+
+    model.traverse(object => {
+      if (object.isMesh) {
+        object.frustumCulled = false;
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+
+    ufoTemplate = model;
+
+    console.log("AFTERHOURS: UFO model loaded!", size);
+  },
+
+  progress => {
+    if (progress.total) {
+      console.log(
+        "UFO loading:",
+        Math.round(progress.loaded / progress.total * 100) + "%"
+      );
+    }
+  },
 
   error => {
-    console.error("Cash model failed to load:", error);
+    console.error("UFO model failed to load:", error);
   }
 );
+
+// ==========================================
+// UFO ENERGY BULLET
+// ==========================================
+
+function createEnergyBullet(origin, target) {
+  const bullet = new THREE.Group();
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 16, 12),
+    new THREE.MeshBasicMaterial({
+      color:0x36eaff
+    })
+  );
+
+  bullet.add(core);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.68, 16, 12),
+    new THREE.MeshBasicMaterial({
+      color:0x773cff,
+      transparent:true,
+      opacity:0.32,
+      depthWrite:false
+    })
+  );
+
+  bullet.add(glow);
+
+  const direction = new THREE.Vector3()
+    .subVectors(target, origin)
+    .normalize();
+
+  bullet.position.copy(origin);
+
+  bullet.userData = {
+    velocity:direction.multiplyScalar(UFO_BULLET_SPEED),
+    life:3.5
+  };
+
+  scene.add(bullet);
+  ufoBullets.push(bullet);
+}
+
+function fireUFOBullet() {
+  if (!activeUFO) return;
+
+  const origin = activeUFO.position.clone();
+  origin.y -= 0.5;
+
+  const target = car.position.clone();
+  target.y += 0.9;
+
+  createEnergyBullet(origin, target);
+
+  console.log("UFO fired energy bullet!");
+}
+
+// ==========================================
+// UFO SPAWN
+// ==========================================
+
+function spawnUFO() {
+  if (!ufoTemplate || activeUFO || !started) return;
+
+  const ufo = new THREE.Group();
+
+  const model = ufoTemplate.clone(true);
+  ufo.add(model);
+
+  ufo.position.set(
+    car.position.x + (Math.random() < 0.5 ? -9 : 9),
+    6 + Math.random() * 3,
+    car.position.z - 38
+  );
+
+  ufo.rotation.y = Math.PI;
+
+  ufo.userData = {
+    targetX:car.position.x,
+    drift:Math.random() * Math.PI * 2
+  };
+
+  scene.add(ufo);
+
+  activeUFO = ufo;
+  ufoLifetime = UFO_ACTIVE_TIME;
+  ufoAttackTimer = 1.1;
+
+  console.log("UFO ATTACK STARTED!");
+}
+
+// ==========================================
+// UFO DISAPPEAR
+// ==========================================
+
+function removeUFO() {
+  if (activeUFO) {
+    scene.remove(activeUFO);
+    activeUFO = null;
+  }
+
+  ufoSpawnTimer =
+    UFO_SPAWN_MIN +
+    Math.random() * (UFO_SPAWN_MAX - UFO_SPAWN_MIN);
+
+  console.log("UFO disappeared");
+}
+
+// ==========================================
+// BULLET CLEANUP
+// ==========================================
+
+function removeBullet(index) {
+  const bullet = ufoBullets[index];
+
+  scene.remove(bullet);
+
+  bullet.traverse(object => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) object.material.dispose();
+  });
+
+  ufoBullets.splice(index, 1);
+}
+
+// ==========================================
+// UFO SPEED DAMAGE
+// ==========================================
+
+function hitByUFO() {
+  if (speedHitCooldown > 0) return;
+
+  speedHitCooldown = 1.1;
+  speedRecoveryTimer = UFO_PENALTY_TIME;
+
+  // Instantly reduce the current speed.
+  speed *= UFO_SPEED_PENALTY;
+
+  console.log("UFO HIT! Temporary speed reduction.");
+
+  const cashDisplay = document.querySelector("#ah-cash");
+
+  if (cashDisplay) {
+    cashDisplay.textContent = "UFO HIT! SPEED REDUCED";
+    cashDisplay.style.color = "#ff55dd";
+  }
+}
+
+// ==========================================
+// UFO UPDATE
+// ==========================================
+
+function updateUFO(delta, elapsedTime) {
+  if (!started) return;
+
+  if (speedHitCooldown > 0) {
+    speedHitCooldown = Math.max(0, speedHitCooldown - delta);
+  }
+
+  if (speedRecoveryTimer > 0) {
+    speedRecoveryTimer = Math.max(0, speedRecoveryTimer - delta);
+  }
+
+  if (!activeUFO) {
+    ufoSpawnTimer -= delta;
+
+    if (ufoSpawnTimer <= 0 && ufoTemplate) {
+      spawnUFO();
+    }
+  }
+
+  if (activeUFO) {
+    ufoLifetime -= delta;
+
+    // Follow the player's horizontal position.
+    const targetX = THREE.MathUtils.clamp(
+      car.position.x + Math.sin(elapsedTime * 1.7) * 2.5,
+      -8,
+      8
+    );
+
+    activeUFO.position.x = THREE.MathUtils.lerp(
+      activeUFO.position.x,
+      targetX,
+      Math.min(1, delta * 1.5)
+    );
+
+    // Keep the UFO ahead of the player.
+    activeUFO.position.z = THREE.MathUtils.lerp(
+      activeUFO.position.z,
+      car.position.z - 30,
+      Math.min(1, delta * 1.1)
+    );
+
+    activeUFO.position.y =
+      6 + Math.sin(elapsedTime * 2.3) * 0.65;
+
+    activeUFO.rotation.z =
+      Math.sin(elapsedTime * 1.8) * 0.07;
+
+    activeUFO.rotation.y += delta * 0.25;
+
+    // Fire periodically.
+    ufoAttackTimer -= delta;
+
+    if (ufoAttackTimer <= 0) {
+      fireUFOBullet();
+      ufoAttackTimer = 1.65 + Math.random() * 0.5;
+    }
+
+    if (ufoLifetime <= 0) {
+      removeUFO();
+    }
+  }
+
+  // Move bullets and detect hits.
+  for (let i = ufoBullets.length - 1; i >= 0; i--) {
+    const bullet = ufoBullets[i];
+
+    bullet.position.addScaledVector(
+      bullet.userData.velocity,
+      delta
+    );
+
+    bullet.userData.life -= delta;
+
+    bullet.rotation.x += delta * 5;
+    bullet.rotation.y += delta * 7;
+
+    const dx = bullet.position.x - car.position.x;
+    const dy = bullet.position.y - (car.position.y + 0.9);
+    const dz = bullet.position.z - car.position.z;
+
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    if (distance < 1.75) {
+      hitByUFO();
+      removeBullet(i);
+      continue;
+    }
+
+    if (
+      bullet.userData.life <= 0 ||
+      bullet.position.z > car.position.z + 30 ||
+      bullet.position.z < car.position.z - 100
+    ) {
+      removeBullet(i);
+    }
+  }
+}
 
 // ==========================================
 // GAME STATE
@@ -589,6 +909,10 @@ hud.innerHTML = `
   <div id="ah-cash"
        style="font-size:17px;font-weight:700;margin-top:14px;color:#66ff9a">
     CASH: $0
+  </div>
+
+  <div id="ah-ufo-status"
+       style="font-size:11px;font-weight:700;margin-top:9px;color:#42eaff">
   </div>
 `;
 
@@ -718,7 +1042,14 @@ function updateDriving(delta) {
 
   speed -= 0.16 * delta;
 
-  speed = THREE.MathUtils.clamp(speed, 0, MAX_SPEED);
+  // Temporary speed penalty after an energy bullet hit.
+  const speedMultiplier = speedRecoveryTimer > 0 ? 0.45 : 1;
+
+  speed = THREE.MathUtils.clamp(
+    speed,
+    0,
+    MAX_SPEED * speedMultiplier
+  );
 
   let direction = 0;
 
@@ -758,6 +1089,17 @@ function updateDriving(delta) {
       Math.round(speed * 160)
     ).padStart(3, "0");
   }
+
+  const ufoStatus = document.querySelector("#ah-ufo-status");
+
+  if (ufoStatus) {
+    if (speedRecoveryTimer > 0) {
+      ufoStatus.textContent = "⚡ SPEED RECOVERING";
+      ufoStatus.style.color = "#ff55dd";
+    } else {
+      ufoStatus.textContent = "";
+    }
+  }
 }
 
 // ==========================================
@@ -774,7 +1116,6 @@ function updateCash(delta, elapsedTime) {
         elapsedTime * 1.5 + pickup.userData.floatOffset
       ) * 0.35;
 
-    // Collect cash when car gets close
     const distanceX = Math.abs(
       pickup.position.x - car.position.x
     );
@@ -791,11 +1132,12 @@ function updateCash(delta, elapsedTime) {
       if (cashDisplay) {
         cashDisplay.textContent =
           "CASH: $" + cashTotal.toLocaleString("en-US");
+
+        cashDisplay.style.color = "#66ff9a";
       }
 
       console.log("Cash collected! Total:", cashTotal);
 
-      // Move collected bundle ahead into space again
       const farthest = Math.min(
         ...cashPickups.map(item => item.position.z)
       );
@@ -809,7 +1151,6 @@ function updateCash(delta, elapsedTime) {
       pickup.userData.floatOffset = Math.random() * Math.PI * 2;
     }
 
-    // Recycle bundles that have passed behind the car
     else if (pickup.position.z > car.position.z + 20) {
       const farthest = Math.min(
         ...cashPickups.map(item => item.position.z)
@@ -927,6 +1268,7 @@ function animate() {
   updateEndlessWorld();
   updatePlanets(delta);
   updateCash(delta, elapsedTime);
+  updateUFO(delta, elapsedTime);
   updateCamera(delta);
 
   renderer.render(scene, camera);
@@ -934,4 +1276,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.5 SPACE CASH COLLECTOR initialized");
+console.log("AFTERHOURS 0.9.6 UFO ASSAULT initialized");
