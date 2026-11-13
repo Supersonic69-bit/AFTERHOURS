@@ -3,98 +3,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#080808">
-  <title>AFTERHOURS — A KALYUG ORIGINAL</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#050505">
+
+  <title>AFTERHOURS | A KALYUG ORIGINAL</title>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      background: #080808;
-      color: #f5f5f5;
+      background: #050505;
+      color: white;
       font-family: Arial, sans-serif;
       overflow: hidden;
+      touch-action: none;
     }
-    #game { width: 100vw; height: 100dvh; }
+
+    #game {
+      width: 100vw;
+      height: 100dvh;
+      position: fixed;
+      inset: 0;
+    }
+
+    #game canvas {
+      display: block;
+    }
+
+    #intro {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      background: #050505;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 24px;
+      transition: opacity 1s;
+    }
+
+    .kalyug {
+      color: #b7ff00;
+      font-size: clamp(42px, 12vw, 75px);
+      font-weight: 900;
+      letter-spacing: -4px;
+      text-shadow: 0 0 25px #b7ff0055;
+      margin-bottom: 35px;
+    }
+
+    .tagline {
+      font-size: clamp(15px, 4vw, 22px);
+      letter-spacing: 3px;
+      line-height: 1.6;
+      font-weight: 800;
+      max-width: 340px;
+    }
+
+    .game-title {
+      margin-top: 45px;
+      font-size: clamp(32px, 9vw, 55px);
+      font-weight: 900;
+      letter-spacing: 5px;
+    }
+
+    .subtitle {
+      color: #999;
+      font-size: 10px;
+      letter-spacing: 4px;
+      margin-top: 12px;
+    }
+
+    #start {
+      margin-top: 55px;
+      background: #b7ff00;
+      color: #080808;
+      border: none;
+      padding: 17px 42px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .footer {
+      position: absolute;
+      bottom: 30px;
+      color: #777;
+      font-size: 10px;
+      letter-spacing: 3px;
+    }
   </style>
 </head>
+
 <body>
+
   <div id="game"></div>
-  <script type="module">
-    import * as THREE from
-      'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x101418);
-    scene.fog = new THREE.Fog(0x101418, 30, 180);
+  <div id="intro">
+    <div class="kalyug">कलयुग</div>
 
-    const camera = new THREE.PerspectiveCamera(
-      65, innerWidth / innerHeight, 0.1, 500
-    );
-    camera.position.set(0, 5, 11);
+    <div class="tagline">
+      ONLY GOD CAN BE<br>
+      THE GODFATHER.
+    </div>
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(innerWidth, innerHeight);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    document.getElementById('game').appendChild(renderer.domElement);
+    <div class="game-title">AFTERHOURS</div>
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x303040, 2));
+    <div class="subtitle">
+      CARS VS RANDOM CARS
+    </div>
 
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(18, 300),
-      new THREE.MeshStandardMaterial({ color: 0x292929 })
-    );
-    road.rotation.x = -Math.PI / 2;
-    road.position.z = -100;
-    scene.add(road);
+    <button id="start">START ENGINE</button>
 
-    const car = new THREE.Group();
+    <div class="footer">A KALYUG ORIGINAL</div>
+  </div>
 
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 0.65, 4),
-      new THREE.MeshStandardMaterial({
-        color: 0x252525, metalness: 0.8, roughness: 0.25
-      })
-    );
-    body.position.y = 0.85;
-    car.add(body);
+  <script type="module" src="./src/game.js"></script>
 
-    const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 0.65, 1.8),
-      new THREE.MeshStandardMaterial({
-        color: 0x151c22, metalness: 0.6, roughness: 0.2
-      })
-    );
-    cabin.position.set(0, 1.42, -0.25);
-    car.add(cabin);
+  <script>
+    document.getElementById("start").addEventListener("click", () => {
+      const intro = document.getElementById("intro");
+      intro.style.opacity = "0";
 
-    for (const x of [-1.05, 1.05]) {
-      for (const z of [-1.3, 1.3]) {
-        const wheel = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.42, 0.42, 0.28, 24),
-          new THREE.MeshStandardMaterial({ color: 0x090909 })
-        );
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.45, z);
-        car.add(wheel);
-      }
-    }
-
-    car.position.set(0, 0, 3);
-    scene.add(car);
-
-    camera.lookAt(car.position);
-
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    addEventListener('resize', () => {
-      camera.aspect = innerWidth / innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
+      setTimeout(() => {
+        intro.style.display = "none";
+      }, 1000);
     });
   </script>
+
 </body>
 </html>
