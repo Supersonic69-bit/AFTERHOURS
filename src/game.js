@@ -4,12 +4,19 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.8 | UFO ASSAULT + OPTIMIZED V10 AUDIO
+// BUILD 0.9.9 | AUTO DRIVE + SWIPE STEERING
 // ==========================================
 
 const game = document.querySelector("#game");
 if (!game) throw new Error("Missing #game element");
 game.innerHTML = "";
+
+// ==========================================
+// DEVICE DETECTION
+// ==========================================
+
+const isMobile = window.matchMedia("(pointer: coarse)").matches;
+let mobileAutoDrive = false;
 
 // ==========================================
 // IPHONE PROTECTION
@@ -32,7 +39,7 @@ html,body {
   padding:0;
   overflow:hidden;
   background:#03050b;
-  touch-action:manipulation;
+  touch-action:none;
 }
 #game {
   position:fixed;
@@ -58,13 +65,13 @@ html,body {
 #ah-controls {pointer-events:none;}
 #ah-controls button {
   pointer-events:auto;
-  min-width:58px;
+  min-width:72px;
   height:58px;
   border:1px solid rgba(255,255,255,.35);
   border-radius:12px;
   background:rgba(8,12,20,.78);
   color:white;
-  font-size:14px;
+  font-size:12px;
   font-weight:700;
   touch-action:none;
 }
@@ -315,7 +322,6 @@ fallbackCabin.position.set(0, 1.35, -0.25);
 fallback.add(fallbackCabin);
 
 const fallbackWheels = [];
-
 const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
 
 for (const x of [-1.05, 1.05]) {
@@ -875,8 +881,7 @@ const keys = {
 const ENGINE_AUDIO_PATH =
   "../assets/planets/audio/u_logan-mean-lamborghinimp3-452474.mp3";
 
-// Do not preload or manipulate playback pitch.
-// This avoids unnecessary real-time audio processing.
+// No preload, playbackRate or pitch processing.
 
 const engineAudio = new Audio();
 engineAudio.loop = true;
@@ -912,11 +917,14 @@ engineAudio.addEventListener("error", () => {
 });
 
 function startEngineAudio() {
-  if (!started || !keys.gas) return;
+  if (!started || (!keys.gas && !mobileAutoDrive)) return;
 
   loadEngineAudio();
 
   if (!engineAudio.paused) return;
+
+  // Invoke play directly from the START ENGINE / keyboard gesture.
+  engineAudio.volume = mobileAutoDrive ? 0.12 : 0.04;
 
   engineAudio.play().then(() => {
     console.log("V10 ENGINE STARTED");
@@ -928,18 +936,26 @@ function startEngineAudio() {
 function updateEngineAudio(delta) {
   if (!started) return;
 
-  const targetVolume = keys.gas
-    ? 0.32
+  const engineActive = mobileAutoDrive || keys.gas;
+
+  const speedRatio = THREE.MathUtils.clamp(
+    speed / MAX_SPEED,
+    0,
+    1
+  );
+
+  const targetVolume = engineActive
+    ? 0.12 + speedRatio * 0.20
     : 0;
 
-  // Volume-only adjustment: no pitch shifting or playback-rate changes.
+  // Volume-only adjustment. No pitch shifting or playback-rate changes.
   engineAudio.volume = THREE.MathUtils.lerp(
     engineAudio.volume,
     targetVolume,
     Math.min(1, delta * 4)
   );
 
-  if (!keys.gas && engineAudio.volume < 0.015) {
+  if (!engineActive && engineAudio.volume < 0.015) {
     engineAudio.pause();
     engineAudio.volume = 0;
   }
@@ -988,7 +1004,7 @@ hud.innerHTML = `
 document.body.appendChild(hud);
 
 // ==========================================
-// MOBILE CONTROLS
+// MOBILE CONTROLS — BRAKE ONLY
 // ==========================================
 
 const controls = document.createElement("div");
@@ -1000,53 +1016,103 @@ controls.style.cssText = `
   left:0;
   width:100%;
   display:none;
-  justify-content:space-between;
+  justify-content:flex-end;
   padding:0 22px;
   box-sizing:border-box;
   z-index:30;
 `;
 
 controls.innerHTML = `
-  <div style="display:flex;gap:12px">
-    <button data-control="left">◀</button>
-    <button data-control="right">▶</button>
-  </div>
-  <div style="display:flex;gap:12px">
-    <button data-control="brake">BRAKE</button>
-    <button data-control="gas">GAS</button>
-  </div>
+  <button data-control="brake">BRAKE</button>
 `;
 
 document.body.appendChild(controls);
 
-controls.querySelectorAll("button").forEach(button => {
-  const name = button.dataset.control;
+const brakeButton = controls.querySelector('[data-control="brake"]');
 
-  button.addEventListener("pointerdown", event => {
-    event.preventDefault();
-    keys[name] = true;
-
-    if (name === "gas") {
-      startEngineAudio();
-    }
-  });
-
-  const release = event => {
-    event.preventDefault();
-    keys[name] = false;
-  };
-
-  button.addEventListener("pointerup", release);
-  button.addEventListener("pointerleave", release);
-  button.addEventListener("pointercancel", release);
+brakeButton.addEventListener("pointerdown", event => {
+  event.preventDefault();
+  keys.brake = true;
+  brakeButton.setPointerCapture?.(event.pointerId);
+  brakeButton.classList.add("active");
 });
 
+function releaseBrake(event) {
+  if (event) event.preventDefault();
+  keys.brake = false;
+  brakeButton.classList.remove("active");
+}
+
+brakeButton.addEventListener("pointerup", releaseBrake);
+brakeButton.addEventListener("pointercancel", releaseBrake);
+brakeButton.addEventListener("lostpointercapture", releaseBrake);
+
 // ==========================================
-// KEYBOARD CONTROLS
+// MOBILE SWIPE STEERING
+// ==========================================
+
+let steeringPointerId = null;
+let steeringStartX = 0;
+let steeringCurrentX = 0;
+
+const SWIPE_THRESHOLD = 12;
+
+renderer.domElement.addEventListener("pointerdown", event => {
+  if (!isMobile || !started) return;
+
+  if (event.target.closest("#ah-controls")) return;
+
+  if (steeringPointerId !== null) return;
+
+  steeringPointerId = event.pointerId;
+  steeringStartX = event.clientX;
+  steeringCurrentX = event.clientX;
+
+  renderer.domElement.setPointerCapture?.(event.pointerId);
+});
+
+renderer.domElement.addEventListener("pointermove", event => {
+  if (!isMobile || event.pointerId !== steeringPointerId) return;
+
+  steeringCurrentX = event.clientX;
+
+  const movement = steeringCurrentX - steeringStartX;
+
+  keys.left = movement < -SWIPE_THRESHOLD;
+  keys.right = movement > SWIPE_THRESHOLD;
+});
+
+function releaseSteering(event) {
+  if (event.pointerId !== steeringPointerId) return;
+
+  steeringPointerId = null;
+  steeringStartX = 0;
+  steeringCurrentX = 0;
+
+  keys.left = false;
+  keys.right = false;
+}
+
+renderer.domElement.addEventListener("pointerup", releaseSteering);
+renderer.domElement.addEventListener("pointercancel", releaseSteering);
+renderer.domElement.addEventListener("lostpointercapture", releaseSteering);
+
+// ==========================================
+// KEYBOARD CONTROLS — DESKTOP UNCHANGED
 // ==========================================
 
 window.addEventListener("keydown", event => {
   const key = event.key.toLowerCase();
+
+  if (
+    key === "arrowleft" ||
+    key === "arrowright" ||
+    key === "arrowup" ||
+    key === "arrowdown" ||
+    key === " "
+  ) {
+    event.preventDefault();
+  }
 
   if (key === "arrowleft" || key === "a") keys.left = true;
   if (key === "arrowright" || key === "d") keys.right = true;
@@ -1068,6 +1134,18 @@ window.addEventListener("keyup", event => {
   if (key === "arrowdown" || key === "s") keys.brake = false;
 });
 
+window.addEventListener("blur", () => {
+  keys.left = false;
+  keys.right = false;
+  keys.gas = false;
+  keys.brake = false;
+
+  if (isMobile) {
+    // Keep automatic driving active if the mobile game loses focus.
+    mobileAutoDrive = started;
+  }
+});
+
 // ==========================================
 // START GAME
 // ==========================================
@@ -1078,7 +1156,17 @@ function startGame() {
   started = true;
 
   hud.style.display = "block";
-  controls.style.display = "flex";
+
+  if (isMobile) {
+    mobileAutoDrive = true;
+    controls.style.display = "flex";
+
+    // Start V10 from the same user gesture as START ENGINE.
+    startEngineAudio();
+  } else {
+    mobileAutoDrive = false;
+    controls.style.display = "none";
+  }
 
   const intro = document.querySelector("#intro");
 
@@ -1090,6 +1178,12 @@ function startGame() {
       intro.style.display = "none";
     }, 1000);
   }
+
+  console.log(
+    isMobile
+      ? "AFTERHOURS: MOBILE AUTO DRIVE ACTIVATED"
+      : "AFTERHOURS: DESKTOP MANUAL DRIVE ACTIVATED"
+  );
 }
 
 const startButton = [
@@ -1115,8 +1209,15 @@ if (startButton) {
 function updateDriving(delta) {
   if (!started) return;
 
-  if (keys.gas) speed += 1.2 * delta;
-  if (keys.brake) speed -= 2.5 * delta;
+  const accelerating = mobileAutoDrive || keys.gas;
+
+  if (accelerating && !keys.brake) {
+    speed += 1.2 * delta;
+  }
+
+  if (keys.brake) {
+    speed -= 2.5 * delta;
+  }
 
   speed -= 0.16 * delta;
 
@@ -1354,4 +1455,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.8 OPTIMIZED V10 AUDIO initialized");
+console.log("AFTERHOURS 0.9.9 AUTO DRIVE + SWIPE STEERING initialized");
