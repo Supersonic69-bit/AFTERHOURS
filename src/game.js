@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.7 | UFO ASSAULT + V10 ENGINE AUDIO
+// BUILD 0.9.8 | UFO ASSAULT + OPTIMIZED V10 AUDIO
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -530,7 +530,6 @@ let activeUFO = null;
 
 const ufoBullets = [];
 
-let nextUfoSpawn = 0;
 let ufoSpawnTimer = 9;
 let ufoAttackTimer = 0;
 let ufoLifetime = 0;
@@ -870,30 +869,41 @@ const keys = {
 };
 
 // ==========================================
-// LAMBORGHINI V10 ENGINE AUDIO
+// OPTIMIZED LAMBORGHINI V10 ENGINE AUDIO
 // ==========================================
 
 const ENGINE_AUDIO_PATH =
   "../assets/planets/audio/u_logan-mean-lamborghinimp3-452474.mp3";
 
-const engineAudio = new Audio(ENGINE_AUDIO_PATH);
+// Do not preload or manipulate playback pitch.
+// This avoids unnecessary real-time audio processing.
 
+const engineAudio = new Audio();
 engineAudio.loop = true;
-engineAudio.preload = "auto";
+engineAudio.preload = "none";
 engineAudio.volume = 0;
-engineAudio.playbackRate = 0.85;
 
-engineAudio.preservesPitch = false;
-engineAudio.webkitPreservesPitch = false;
+let engineAudioLoaded = false;
+let engineAudioLoading = false;
 
-let engineAudioReady = false;
+function loadEngineAudio() {
+  if (engineAudioLoaded || engineAudioLoading) return;
 
-engineAudio.addEventListener("canplaythrough", () => {
-  engineAudioReady = true;
+  engineAudioLoading = true;
+  engineAudio.src = ENGINE_AUDIO_PATH;
+  engineAudio.load();
+
+  console.log("AFTERHOURS: Loading V10 engine audio");
+}
+
+engineAudio.addEventListener("canplay", () => {
+  engineAudioLoaded = true;
+  engineAudioLoading = false;
   console.log("AFTERHOURS: V10 engine audio ready");
 });
 
 engineAudio.addEventListener("error", () => {
+  engineAudioLoading = false;
   console.error(
     "Engine audio failed to load. Check MP3 path:",
     ENGINE_AUDIO_PATH,
@@ -901,10 +911,12 @@ engineAudio.addEventListener("error", () => {
   );
 });
 
-// Start audio directly from a real user interaction.
-// This supports iPhone browser autoplay restrictions.
 function startEngineAudio() {
-  if (!started || !keys.gas || !engineAudio.paused) return;
+  if (!started || !keys.gas) return;
+
+  loadEngineAudio();
+
+  if (!engineAudio.paused) return;
 
   engineAudio.play().then(() => {
     console.log("V10 ENGINE STARTED");
@@ -913,42 +925,23 @@ function startEngineAudio() {
   });
 }
 
-// Dynamically change engine RPM pitch and volume.
 function updateEngineAudio(delta) {
   if (!started) return;
 
-  const accelerating = keys.gas;
-
-  const normalizedSpeed = THREE.MathUtils.clamp(
-    speed / MAX_SPEED,
-    0,
-    1
-  );
-
-  // Engine pitch rises with vehicle speed.
-  const targetRate = 0.85 + normalizedSpeed * 0.75;
-
-  // Louder when accelerating and faster.
-  const targetVolume = accelerating
-    ? 0.25 + normalizedSpeed * 0.40
+  const targetVolume = keys.gas
+    ? 0.32
     : 0;
 
-  engineAudio.playbackRate = THREE.MathUtils.lerp(
-    engineAudio.playbackRate,
-    targetRate,
-    Math.min(1, delta * 3.5)
-  );
-
+  // Volume-only adjustment: no pitch shifting or playback-rate changes.
   engineAudio.volume = THREE.MathUtils.lerp(
     engineAudio.volume,
     targetVolume,
-    Math.min(1, delta * 5)
+    Math.min(1, delta * 4)
   );
 
-  // If audio has been paused, wait for the next direct
-  // GAS-button or keyboard interaction to resume playback.
-  if (!accelerating && engineAudio.volume < 0.015) {
+  if (!keys.gas && engineAudio.volume < 0.015) {
     engineAudio.pause();
+    engineAudio.volume = 0;
   }
 }
 
@@ -1033,7 +1026,6 @@ controls.querySelectorAll("button").forEach(button => {
     event.preventDefault();
     keys[name] = true;
 
-    // Start the engine audio directly from the GAS touch.
     if (name === "gas") {
       startEngineAudio();
     }
@@ -1362,4 +1354,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.7 V10 ENGINE AUDIO initialized");
+console.log("AFTERHOURS 0.9.8 OPTIMIZED V10 AUDIO initialized");
