@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.6 | UFO ASSAULT
+// BUILD 0.9.7 | UFO ASSAULT + V10 ENGINE AUDIO
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -545,7 +545,6 @@ const UFO_BULLET_SPEED = 55;
 const UFO_SPEED_PENALTY = 0.45;
 const UFO_PENALTY_TIME = 3;
 
-// Load the actual UFO asset from GitHub.
 const ufoLoader = new GLTFLoader();
 
 ufoLoader.load(
@@ -570,7 +569,6 @@ ufoLoader.load(
       return;
     }
 
-    // Normalize the UFO to a visible game size.
     const scale = 6 / longestDimension;
 
     model.scale.setScalar(scale);
@@ -743,7 +741,6 @@ function hitByUFO() {
   speedHitCooldown = 1.1;
   speedRecoveryTimer = UFO_PENALTY_TIME;
 
-  // Instantly reduce the current speed.
   speed *= UFO_SPEED_PENALTY;
 
   console.log("UFO HIT! Temporary speed reduction.");
@@ -782,7 +779,6 @@ function updateUFO(delta, elapsedTime) {
   if (activeUFO) {
     ufoLifetime -= delta;
 
-    // Follow the player's horizontal position.
     const targetX = THREE.MathUtils.clamp(
       car.position.x + Math.sin(elapsedTime * 1.7) * 2.5,
       -8,
@@ -795,7 +791,6 @@ function updateUFO(delta, elapsedTime) {
       Math.min(1, delta * 1.5)
     );
 
-    // Keep the UFO ahead of the player.
     activeUFO.position.z = THREE.MathUtils.lerp(
       activeUFO.position.z,
       car.position.z - 30,
@@ -810,7 +805,6 @@ function updateUFO(delta, elapsedTime) {
 
     activeUFO.rotation.y += delta * 0.25;
 
-    // Fire periodically.
     ufoAttackTimer -= delta;
 
     if (ufoAttackTimer <= 0) {
@@ -823,7 +817,6 @@ function updateUFO(delta, elapsedTime) {
     }
   }
 
-  // Move bullets and detect hits.
   for (let i = ufoBullets.length - 1; i >= 0; i--) {
     const bullet = ufoBullets[i];
 
@@ -875,6 +868,89 @@ const keys = {
   gas:false,
   brake:false
 };
+
+// ==========================================
+// LAMBORGHINI V10 ENGINE AUDIO
+// ==========================================
+
+const ENGINE_AUDIO_PATH =
+  "../assets/planets/audio/u_logan-mean-lamborghinimp3-452474.mp3";
+
+const engineAudio = new Audio(ENGINE_AUDIO_PATH);
+
+engineAudio.loop = true;
+engineAudio.preload = "auto";
+engineAudio.volume = 0;
+engineAudio.playbackRate = 0.85;
+
+engineAudio.preservesPitch = false;
+engineAudio.webkitPreservesPitch = false;
+
+let engineAudioReady = false;
+
+engineAudio.addEventListener("canplaythrough", () => {
+  engineAudioReady = true;
+  console.log("AFTERHOURS: V10 engine audio ready");
+});
+
+engineAudio.addEventListener("error", () => {
+  console.error(
+    "Engine audio failed to load. Check MP3 path:",
+    ENGINE_AUDIO_PATH,
+    engineAudio.error
+  );
+});
+
+// Start audio directly from a real user interaction.
+// This supports iPhone browser autoplay restrictions.
+function startEngineAudio() {
+  if (!started || !keys.gas || !engineAudio.paused) return;
+
+  engineAudio.play().then(() => {
+    console.log("V10 ENGINE STARTED");
+  }).catch(error => {
+    console.warn("Engine audio playback blocked:", error);
+  });
+}
+
+// Dynamically change engine RPM pitch and volume.
+function updateEngineAudio(delta) {
+  if (!started) return;
+
+  const accelerating = keys.gas;
+
+  const normalizedSpeed = THREE.MathUtils.clamp(
+    speed / MAX_SPEED,
+    0,
+    1
+  );
+
+  // Engine pitch rises with vehicle speed.
+  const targetRate = 0.85 + normalizedSpeed * 0.75;
+
+  // Louder when accelerating and faster.
+  const targetVolume = accelerating
+    ? 0.25 + normalizedSpeed * 0.40
+    : 0;
+
+  engineAudio.playbackRate = THREE.MathUtils.lerp(
+    engineAudio.playbackRate,
+    targetRate,
+    Math.min(1, delta * 3.5)
+  );
+
+  engineAudio.volume = THREE.MathUtils.lerp(
+    engineAudio.volume,
+    targetVolume,
+    Math.min(1, delta * 5)
+  );
+
+  // If audio has been paused, wait for the next direct
+  // GAS-button or keyboard interaction to resume playback.
+  if (!accelerating && engineAudio.volume < 0.015) {
+    engineAudio.pause();
+  }
+}
 
 // ==========================================
 // HUD
@@ -956,6 +1032,11 @@ controls.querySelectorAll("button").forEach(button => {
   button.addEventListener("pointerdown", event => {
     event.preventDefault();
     keys[name] = true;
+
+    // Start the engine audio directly from the GAS touch.
+    if (name === "gas") {
+      startEngineAudio();
+    }
   });
 
   const release = event => {
@@ -977,7 +1058,12 @@ window.addEventListener("keydown", event => {
 
   if (key === "arrowleft" || key === "a") keys.left = true;
   if (key === "arrowright" || key === "d") keys.right = true;
-  if (key === "arrowup" || key === "w") keys.gas = true;
+
+  if (key === "arrowup" || key === "w") {
+    keys.gas = true;
+    startEngineAudio();
+  }
+
   if (key === "arrowdown" || key === "s") keys.brake = true;
 });
 
@@ -991,7 +1077,7 @@ window.addEventListener("keyup", event => {
 });
 
 // ==========================================
-// START GAME — NO AUDIO
+// START GAME
 // ==========================================
 
 function startGame() {
@@ -1042,7 +1128,6 @@ function updateDriving(delta) {
 
   speed -= 0.16 * delta;
 
-  // Temporary speed penalty after an energy bullet hit.
   const speedMultiplier = speedRecoveryTimer > 0 ? 0.45 : 1;
 
   speed = THREE.MathUtils.clamp(
@@ -1265,6 +1350,7 @@ function animate() {
   const elapsedTime = clock.elapsedTime;
 
   updateDriving(delta);
+  updateEngineAudio(delta);
   updateEndlessWorld();
   updatePlanets(delta);
   updateCash(delta, elapsedTime);
@@ -1276,4 +1362,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.6 UFO ASSAULT initialized");
+console.log("AFTERHOURS 0.9.7 V10 ENGINE AUDIO initialized");
