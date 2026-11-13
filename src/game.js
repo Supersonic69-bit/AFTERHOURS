@@ -3,95 +3,85 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.6 | MOBILE SELECTION FIX
+// BUILD 0.7 | NASA SPACE EDITION
 // ==========================================
 
 const game = document.querySelector("#game");
 
-if (!game) {
-  throw new Error("Missing #game element");
-}
+if (!game) throw new Error("Missing #game element");
 
 game.innerHTML = "";
 
-// Stop iPhone text selection and callout menus
+// ==========================================
+// IPHONE SELECTION PROTECTION
+// ==========================================
+
 document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("selectstart", e => e.preventDefault());
 document.addEventListener("dragstart", e => e.preventDefault());
 
-document.addEventListener("touchstart", e => {
-  if (e.target.closest("#game, #ah-hud, #ah-controls")) {
-    // Keep game interaction, but prevent native selection.
-    e.target.style.webkitTouchCallout = "none";
-  }
-}, { passive: true });
-
-// ==========================================
-// GLOBAL STYLE
-// ==========================================
-
 const style = document.createElement("style");
 
 style.textContent = `
-  * {
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important;
-    -webkit-tap-highlight-color: transparent !important;
-  }
+* {
+  -webkit-user-select:none !important;
+  user-select:none !important;
+  -webkit-touch-callout:none !important;
+  -webkit-tap-highlight-color:transparent !important;
+}
 
-  html, body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #111820;
-    touch-action: manipulation;
-  }
+html,body {
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#03050b;
+  touch-action:manipulation;
+}
 
-  #game {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    touch-action: none;
-  }
+#game {
+  position:fixed;
+  inset:0;
+  overflow:hidden;
+  touch-action:none;
+}
 
-  #game canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-    touch-action: none;
-  }
+#game canvas {
+  display:block;
+  width:100%;
+  height:100%;
+  touch-action:none;
+}
 
-  #ah-hud, #ah-hud * {
-    pointer-events: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important;
-  }
+#ah-hud,#ah-hud * {
+  pointer-events:none !important;
+  -webkit-user-select:none !important;
+  user-select:none !important;
+  -webkit-touch-callout:none !important;
+}
 
-  #ah-controls {
-    pointer-events: none;
-  }
+#ah-controls {
+  pointer-events:none;
+}
 
-  #ah-controls button {
-    pointer-events: auto;
-    min-width: 58px;
-    height: 58px;
-    border: 1px solid rgba(255,255,255,.35);
-    border-radius: 12px;
-    background: rgba(12,16,19,.78);
-    color: white;
-    font-size: 14px;
-    font-weight: 700;
-    touch-action: none;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important;
-  }
+#ah-controls button {
+  pointer-events:auto;
+  min-width:58px;
+  height:58px;
+  border:1px solid rgba(255,255,255,.35);
+  border-radius:12px;
+  background:rgba(8,12,20,.78);
+  color:white;
+  font-size:14px;
+  font-weight:700;
+  touch-action:none;
+  -webkit-user-select:none !important;
+  user-select:none !important;
+  -webkit-touch-callout:none !important;
+}
 
-  #ah-controls button:active {
-    background: rgba(255,255,255,.25);
-  }
+#ah-controls button:active {
+  background:rgba(255,255,255,.25);
+}
 `;
 
 document.head.appendChild(style);
@@ -101,21 +91,22 @@ document.head.appendChild(style);
 // ==========================================
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111820);
-scene.fog = new THREE.Fog(0x111820, 90, 420);
+
+scene.background = new THREE.Color(0x03050b);
+scene.fog = new THREE.Fog(0x111820, 100, 440);
 
 const camera = new THREE.PerspectiveCamera(
   65,
   window.innerWidth / window.innerHeight,
   0.1,
-  1000
+  1200
 );
 
 camera.position.set(0, 5.5, 11);
 
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  powerPreference: "high-performance"
+  antialias:true,
+  powerPreference:"high-performance"
 });
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
@@ -125,14 +116,44 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 game.appendChild(renderer.domElement);
 
 // ==========================================
+// NASA SPACE BACKGROUND
+// Image is in repository root.
+// game.js is inside src/.
+// ==========================================
+
+const textureLoader = new THREE.TextureLoader();
+
+textureLoader.load(
+  "../deep_space_combined_2k.png",
+
+  texture => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    texture.needsUpdate = true;
+
+    scene.background = texture;
+    scene.backgroundIntensity = 0.85;
+
+    console.log("AFTERHOURS: Space background loaded.");
+  },
+
+  undefined,
+
+  error => {
+    console.error("Space texture failed to load:", error);
+    scene.background = new THREE.Color(0x03050b);
+  }
+);
+
+// ==========================================
 // LIGHTING
 // ==========================================
 
 scene.add(
-  new THREE.HemisphereLight(0xb9c9d8, 0x252a2e, 2)
+  new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8)
 );
 
-const sunlight = new THREE.DirectionalLight(0xffffff, 2.2);
+const sunlight = new THREE.DirectionalLight(0xffffff, 1.8);
 sunlight.position.set(-30, 60, 25);
 scene.add(sunlight);
 
@@ -141,23 +162,23 @@ scene.add(sunlight);
 // ==========================================
 
 const asphaltMat = new THREE.MeshStandardMaterial({
-  color: 0x24292d,
-  roughness: 0.95
+  color:0x24292d,
+  roughness:0.95
 });
 
 const groundMat = new THREE.MeshStandardMaterial({
-  color: 0x303b37,
-  roughness: 1
+  color:0x303b37,
+  roughness:1
 });
 
 const lineMat = new THREE.MeshStandardMaterial({
-  color: 0xd8d8d2,
-  roughness: 0.8
+  color:0xd8d8d2,
+  roughness:0.8
 });
 
 const curbMat = new THREE.MeshStandardMaterial({
-  color: 0x777b7b,
-  roughness: 0.9
+  color:0x777b7b,
+  roughness:0.9
 });
 
 // ==========================================
@@ -198,7 +219,7 @@ function createRoadSegment(z) {
   ground.position.y = -0.28;
   group.add(ground);
 
-  for (const side of [-1, 1]) {
+  for (const side of [-1,1]) {
     const curb = new THREE.Mesh(
       new THREE.BoxGeometry(
         0.35,
@@ -228,7 +249,7 @@ for (let i = 0; i < SEGMENT_COUNT; i++) {
 }
 
 // ==========================================
-// CONTINUOUS ROAD MARKINGS
+// ROAD MARKINGS
 // ==========================================
 
 const DASH_SPACING = 18;
@@ -242,10 +263,7 @@ const dashGeometry = new THREE.BoxGeometry(
 );
 
 for (let i = 0; i < DASH_COUNT; i++) {
-  const dash = new THREE.Mesh(
-    dashGeometry,
-    lineMat
-  );
+  const dash = new THREE.Mesh(dashGeometry, lineMat);
 
   dash.position.set(
     0,
@@ -257,18 +275,6 @@ for (let i = 0; i < DASH_COUNT; i++) {
   dashes.push(dash);
 }
 
-function updateRoadMarkings() {
-  for (const dash of dashes) {
-    if (dash.position.z > car.position.z + 25) {
-      const farthest = Math.min(
-        ...dashes.map(d => d.position.z)
-      );
-
-      dash.position.z = farthest - DASH_SPACING;
-    }
-  }
-}
-
 // ==========================================
 // ROADSIDE BUILDINGS
 // ==========================================
@@ -276,13 +282,13 @@ function updateRoadMarkings() {
 const roadsideObjects = [];
 
 const buildingMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0x35423b }),
-  new THREE.MeshStandardMaterial({ color: 0x454a49 }),
-  new THREE.MeshStandardMaterial({ color: 0x303a43 }),
-  new THREE.MeshStandardMaterial({ color: 0x55534c })
+  new THREE.MeshStandardMaterial({color:0x35423b}),
+  new THREE.MeshStandardMaterial({color:0x454a49}),
+  new THREE.MeshStandardMaterial({color:0x303a43}),
+  new THREE.MeshStandardMaterial({color:0x55534c})
 ];
 
-function createRoadsideObject(side, z) {
+function createRoadsideObject(side,z) {
   const group = new THREE.Group();
 
   group.position.set(
@@ -295,7 +301,7 @@ function createRoadsideObject(side, z) {
   const width = 2 + Math.random() * 4;
 
   const building = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, width),
+    new THREE.BoxGeometry(width,height,width),
     buildingMaterials[
       Math.floor(Math.random() * buildingMaterials.length)
     ]
@@ -305,14 +311,14 @@ function createRoadsideObject(side, z) {
   group.add(building);
 
   const windowMat = new THREE.MeshStandardMaterial({
-    color: 0x9b9b85,
-    emissive: 0x29271c,
-    emissiveIntensity: 0.35
+    color:0x9b9b85,
+    emissive:0x29271c,
+    emissiveIntensity:0.35
   });
 
   for (let i = 0; i < 3; i++) {
     const windowMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.45, 0.5, 0.04),
+      new THREE.BoxGeometry(0.45,0.5,0.04),
       windowMat
     );
 
@@ -334,25 +340,8 @@ for (let i = 0; i < 42; i++) {
   const z = 100 - Math.floor(i / 2) * 45;
 
   roadsideObjects.push(
-    createRoadsideObject(side, z)
+    createRoadsideObject(side,z)
   );
-}
-
-function updateRoadsideObjects() {
-  for (const object of roadsideObjects) {
-    if (object.position.z > car.position.z + 35) {
-      const farthest = Math.min(
-        ...roadsideObjects.map(o => o.position.z)
-      );
-
-      object.position.z =
-        farthest - 40 - Math.random() * 35;
-
-      object.position.x =
-        (object.position.x < 0 ? -1 : 1) *
-        (10 + Math.random() * 8);
-    }
-  }
 }
 
 // ==========================================
@@ -363,19 +352,19 @@ const car = new THREE.Group();
 scene.add(car);
 
 const bodyMat = new THREE.MeshStandardMaterial({
-  color: 0x171a1d,
-  metalness: 0.7,
-  roughness: 0.28
+  color:0x171a1d,
+  metalness:0.7,
+  roughness:0.28
 });
 
 const glassMat = new THREE.MeshStandardMaterial({
-  color: 0x263b49,
-  metalness: 0.5,
-  roughness: 0.2
+  color:0x263b49,
+  metalness:0.5,
+  roughness:0.2
 });
 
 const body = new THREE.Mesh(
-  new THREE.BoxGeometry(2, 0.65, 4.2),
+  new THREE.BoxGeometry(2,0.65,4.2),
   bodyMat
 );
 
@@ -383,51 +372,51 @@ body.position.y = 0.75;
 car.add(body);
 
 const cabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1.55, 0.65, 1.9),
+  new THREE.BoxGeometry(1.55,0.65,1.9),
   glassMat
 );
 
-cabin.position.set(0, 1.35, -0.25);
+cabin.position.set(0,1.35,-0.25);
 car.add(cabin);
 
 const wheelMat = new THREE.MeshStandardMaterial({
-  color: 0x080808,
-  roughness: 0.95
+  color:0x080808,
+  roughness:0.95
 });
 
 const wheels = [];
 
-for (const x of [-1.05, 1.05]) {
-  for (const z of [-1.35, 1.35]) {
+for (const x of [-1.05,1.05]) {
+  for (const z of [-1.35,1.35]) {
     const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.42, 0.28, 20),
+      new THREE.CylinderGeometry(0.42,0.42,0.28,20),
       wheelMat
     );
 
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, 0.43, z);
+    wheel.position.set(x,0.43,z);
     car.add(wheel);
     wheels.push(wheel);
   }
 }
 
 const headlightMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff,
-  emissive: 0xffffff,
-  emissiveIntensity: 1.2
+  color:0xffffff,
+  emissive:0xffffff,
+  emissiveIntensity:1.2
 });
 
-for (const x of [-0.65, 0.65]) {
+for (const x of [-0.65,0.65]) {
   const light = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35, 0.16, 0.06),
+    new THREE.BoxGeometry(0.35,0.16,0.06),
     headlightMat
   );
 
-  light.position.set(x, 0.85, -2.12);
+  light.position.set(x,0.85,-2.12);
   car.add(light);
 }
 
-car.position.set(0, 0, 3);
+car.position.set(0,0,3);
 
 // ==========================================
 // GAME STATE
@@ -440,10 +429,10 @@ let started = false;
 const MAX_SPEED = 2.1;
 
 const keys = {
-  left: false,
-  right: false,
-  gas: false,
-  brake: false
+  left:false,
+  right:false,
+  gas:false,
+  brake:false
 };
 
 // ==========================================
@@ -513,7 +502,7 @@ document.body.appendChild(controls);
 controls.querySelectorAll("button").forEach(button => {
   const name = button.dataset.control;
 
-  button.addEventListener("pointerdown", event => {
+  button.addEventListener("pointerdown",event => {
     event.preventDefault();
     keys[name] = true;
   });
@@ -523,16 +512,16 @@ controls.querySelectorAll("button").forEach(button => {
     keys[name] = false;
   };
 
-  button.addEventListener("pointerup", release);
-  button.addEventListener("pointerleave", release);
-  button.addEventListener("pointercancel", release);
+  button.addEventListener("pointerup",release);
+  button.addEventListener("pointerleave",release);
+  button.addEventListener("pointercancel",release);
 });
 
 // ==========================================
 // KEYBOARD CONTROLS
 // ==========================================
 
-window.addEventListener("keydown", event => {
+window.addEventListener("keydown",event => {
   const key = event.key.toLowerCase();
 
   if (key === "arrowleft" || key === "a") keys.left = true;
@@ -541,7 +530,7 @@ window.addEventListener("keydown", event => {
   if (key === "arrowdown" || key === "s") keys.brake = true;
 });
 
-window.addEventListener("keyup", event => {
+window.addEventListener("keyup",event => {
   const key = event.key.toLowerCase();
 
   if (key === "arrowleft" || key === "a") keys.left = false;
@@ -558,6 +547,7 @@ function startGame() {
   if (started) return;
 
   started = true;
+
   hud.style.display = "block";
   controls.style.display = "flex";
 
@@ -569,7 +559,7 @@ function startGame() {
 
     setTimeout(() => {
       intro.style.display = "none";
-    }, 1000);
+    },1000);
   }
 }
 
@@ -580,12 +570,16 @@ const startButton = [
 );
 
 if (startButton) {
-  startButton.addEventListener("click", startGame);
+  startButton.addEventListener("click",startGame);
 } else {
   const intro = document.querySelector("#intro");
 
   if (intro) {
-    intro.addEventListener("click", startGame, { once: true });
+    intro.addEventListener(
+      "click",
+      startGame,
+      {once:true}
+    );
   }
 }
 
@@ -615,7 +609,7 @@ function updateDriving(delta) {
   steering = THREE.MathUtils.lerp(
     steering,
     direction,
-    Math.min(1, delta * 5)
+    Math.min(1,delta * 5)
   );
 
   car.position.x +=
@@ -644,7 +638,7 @@ function updateDriving(delta) {
   if (speedDisplay) {
     speedDisplay.textContent = String(
       Math.round(speed * 160)
-    ).padStart(3, "0");
+    ).padStart(3,"0");
   }
 }
 
@@ -663,8 +657,30 @@ function updateEndlessWorld() {
     }
   }
 
-  updateRoadMarkings();
-  updateRoadsideObjects();
+  for (const dash of dashes) {
+    if (dash.position.z > car.position.z + 25) {
+      const farthest = Math.min(
+        ...dashes.map(d => d.position.z)
+      );
+
+      dash.position.z = farthest - DASH_SPACING;
+    }
+  }
+
+  for (const object of roadsideObjects) {
+    if (object.position.z > car.position.z + 35) {
+      const farthest = Math.min(
+        ...roadsideObjects.map(o => o.position.z)
+      );
+
+      object.position.z =
+        farthest - 40 - Math.random() * 35;
+
+      object.position.x =
+        (object.position.x < 0 ? -1 : 1) *
+        (10 + Math.random() * 8);
+    }
+  }
 }
 
 // ==========================================
@@ -680,7 +696,7 @@ function updateCamera(delta) {
 
   camera.position.lerp(
     targetPosition,
-    Math.min(1, delta * 3)
+    Math.min(1,delta * 3)
   );
 
   camera.lookAt(
@@ -694,7 +710,7 @@ function updateCamera(delta) {
 // RESIZE
 // ==========================================
 
-window.addEventListener("resize", () => {
+window.addEventListener("resize",() => {
   camera.aspect =
     window.innerWidth / window.innerHeight;
 
@@ -706,7 +722,7 @@ window.addEventListener("resize", () => {
   );
 
   renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 1.7)
+    Math.min(window.devicePixelRatio,1.7)
   );
 });
 
@@ -719,13 +735,13 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
-  const delta = Math.min(clock.getDelta(), 0.04);
+  const delta = Math.min(clock.getDelta(),0.04);
 
   updateDriving(delta);
   updateEndlessWorld();
   updateCamera(delta);
 
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 animate();
