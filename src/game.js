@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.10 | ASTEROID FIELD + AUTO DRIVE
+// BUILD 0.9.11 | INTEL GPU OPTIMIZATION
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -19,16 +19,12 @@ let steering = 0;
 let cashTotal = 0;
 
 const MAX_SPEED = 2.1;
+const RENDER_PIXEL_RATIO = 1.0;
 
-const keys = {
-  left:false,
-  right:false,
-  gas:false,
-  brake:false
-};
+const keys = { left:false, right:false, gas:false, brake:false };
 
 // ==========================================
-// IPHONE PROTECTION
+// INPUT PROTECTION
 // ==========================================
 
 document.addEventListener("contextmenu", e => e.preventDefault());
@@ -74,7 +70,7 @@ html,body {
 document.head.appendChild(style);
 
 // ==========================================
-// SCENE
+// SCENE + OPTIMIZED RENDERER
 // ==========================================
 
 const scene = new THREE.Scene();
@@ -87,12 +83,14 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 5.5, 14);
 
 const renderer = new THREE.WebGLRenderer({
-  antialias:true,
+  antialias:false,
   alpha:false,
-  powerPreference:"high-performance"
+  powerPreference:"low-power",
+  stencil:false,
+  depth:true
 });
 
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+renderer.setPixelRatio(RENDER_PIXEL_RATIO);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -101,6 +99,10 @@ game.appendChild(renderer.domElement);
 
 const textureLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
+
+// Reused geometries reduce GPU memory and setup overhead.
+const planetGeometry = new THREE.SphereGeometry(1, 24, 16);
+const planetGlowGeometry = new THREE.SphereGeometry(1.045, 20, 12);
 
 // ==========================================
 // SPACE BACKGROUND
@@ -165,7 +167,7 @@ for (const [name,path] of Object.entries(planetFiles)) {
     texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(
-        renderer.capabilities.getMaxAnisotropy(),8
+        renderer.capabilities.getMaxAnisotropy(), 4
       );
 
       planetTextures[name] = texture;
@@ -176,16 +178,15 @@ for (const [name,path] of Object.entries(planetFiles)) {
           planet.userData.surface.material.needsUpdate = true;
         }
       }
-
-      console.log("Planet texture loaded:",name);
+      console.log("Planet texture loaded:", name);
     },
     undefined,
-    error => console.error("Planet texture failed:",name,error)
+    error => console.error("Planet texture failed:", name, error)
   );
 }
 
 // ==========================================
-// PLANETS
+// PLANETS — REDUCED DRAW COST
 // ==========================================
 
 function createRoadsidePlanet(side,z,index) {
@@ -200,16 +201,13 @@ function createRoadsidePlanet(side,z,index) {
 
   if (planetTextures[type]) material.map = planetTextures[type];
 
-  const sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1,40,32),material
-  );
-
+  const sphere = new THREE.Mesh(planetGeometry, material);
   sphere.scale.setScalar(radius);
   sphere.rotation.z = Math.random() * Math.PI;
   group.add(sphere);
 
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(1.045,32,24),
+    planetGlowGeometry,
     new THREE.MeshBasicMaterial({
       color:planetColors[type],
       transparent:true,
@@ -239,9 +237,9 @@ function createRoadsidePlanet(side,z,index) {
   return group;
 }
 
-for (let i=0;i<24;i++) {
+for (let i=0; i<16; i++) {
   const side = i % 2 === 0 ? -1 : 1;
-  const z = 100 - Math.floor(i/2)*55;
+  const z = 100 - Math.floor(i/2)*75;
   roadsidePlanets.push(createRoadsidePlanet(side,z,i));
 }
 
@@ -299,7 +297,7 @@ const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
 for (const x of [-1.05,1.05]) {
   for (const z of [-1.35,1.35]) {
     const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42,0.42,0.28,20),
+      new THREE.CylinderGeometry(0.42,0.42,0.28,16),
       wheelMat
     );
     wheel.rotation.z = Math.PI/2;
@@ -351,10 +349,9 @@ gltfLoader.load(
 
     model.traverse(object => {
       if (object.isMesh) {
-        object.castShadow = true;
-        object.receiveShadow = true;
-        object.frustumCulled = false;
-        if (object.material) object.material.needsUpdate = true;
+        object.castShadow = false;
+        object.receiveShadow = false;
+        object.frustumCulled = true;
       }
     });
 
@@ -456,9 +453,9 @@ cashLoader.load(
 
     model.traverse(object => {
       if (object.isMesh) {
-        object.frustumCulled = false;
-        object.castShadow = true;
-        object.receiveShadow = true;
+        object.frustumCulled = true;
+        object.castShadow = false;
+        object.receiveShadow = false;
       }
     });
 
@@ -477,13 +474,13 @@ cashLoader.load(
 );
 
 // ==========================================
-// ASTEROID BELT — NEW
+// ASTEROID FIELD — INTEL OPTIMIZED
 // ==========================================
 
 const ASTEROID_MODEL_PATH =
   "../assets/planets/asteroid.glb";
 
-const ASTEROID_COUNT = 36;
+const ASTEROID_COUNT = 12;
 const asteroids = [];
 let asteroidTemplate = null;
 
@@ -492,7 +489,6 @@ function randomAsteroidSide() {
 }
 
 function randomAsteroidX(side) {
-  // Outer lanes only. Cash collection remains in the centre.
   return side * (9 + Math.random()*12);
 }
 
@@ -532,20 +528,19 @@ function createAsteroid(z,index) {
 }
 
 function createAsteroidField() {
-  if (!asteroidTemplate || asteroids.length > 0) return;
+  if (!asteroidTemplate || asteroids.length>0) return;
 
   for (let i=0;i<ASTEROID_COUNT;i++) {
-    createAsteroid(85-i*26,i);
+    createAsteroid(85-i*55,i);
   }
 
-  console.log("AFTERHOURS: Asteroid field created!");
+  console.log("AFTERHOURS: Optimized asteroid field created!");
 }
 
 const asteroidLoader = new GLTFLoader();
 
 asteroidLoader.load(
   ASTEROID_MODEL_PATH,
-
   gltf => {
     const model = gltf.scene;
     model.updateMatrixWorld(true);
@@ -564,7 +559,6 @@ asteroidLoader.load(
       return;
     }
 
-    // Normalize once. Clones reuse model geometry and materials.
     const normalizeScale = 1/longest;
     model.scale.setScalar(normalizeScale);
 
@@ -576,7 +570,7 @@ asteroidLoader.load(
 
     model.traverse(object => {
       if (object.isMesh) {
-        object.frustumCulled = false;
+        object.frustumCulled = true;
         object.castShadow = false;
         object.receiveShadow = false;
       }
@@ -586,10 +580,8 @@ asteroidLoader.load(
     asteroidTemplate.add(model);
 
     createAsteroidField();
-
     console.log("AFTERHOURS: Asteroid GLB loaded!",size);
   },
-
   progress => {
     if (progress.total) {
       console.log("Asteroid loading:",Math.round(
@@ -597,14 +589,11 @@ asteroidLoader.load(
       )+"%");
     }
   },
-
-  error => {
-    console.error("Asteroid model failed to load:",error);
-  }
+  error => console.error("Asteroid model failed to load:",error)
 );
 
 // ==========================================
-// ASTEROID ROTATION
+// ASTEROID ANIMATION
 // ==========================================
 
 function updateAsteroids(delta) {
@@ -615,29 +604,27 @@ function updateAsteroids(delta) {
   }
 }
 
-// ==========================================
-// ASTEROID ENDLESS RECYCLING
-// ==========================================
-
 function recycleAsteroids() {
-  if (asteroids.length === 0) return;
+  if (!asteroids.length) return;
+
+  let farthest = Infinity;
+  for (const item of asteroids) {
+    if (item.position.z < farthest) farthest = item.position.z;
+  }
 
   for (const asteroid of asteroids) {
     if (asteroid.position.z > car.position.z+45) {
-      const farthest = Math.min(
-        ...asteroids.map(item => item.position.z)
-      );
-
       const side = randomAsteroidSide();
 
       asteroid.position.set(
         randomAsteroidX(side),
         1+Math.random()*15,
-        farthest-26-Math.random()*25
+        farthest-55-Math.random()*25
       );
 
       asteroid.scale.setScalar(1.2+Math.random()*2.8);
       asteroid.userData.side = side;
+      farthest = asteroid.position.z;
     }
   }
 }
@@ -698,9 +685,9 @@ ufoLoader.load(
 
     model.traverse(object => {
       if (object.isMesh) {
-        object.frustumCulled = false;
-        object.castShadow = true;
-        object.receiveShadow = true;
+        object.frustumCulled = true;
+        object.castShadow = false;
+        object.receiveShadow = false;
       }
     });
 
@@ -718,20 +705,20 @@ ufoLoader.load(
 );
 
 // ==========================================
-// UFO ENERGY BULLET
+// UFO ENERGY BULLETS
 // ==========================================
 
 function createEnergyBullet(origin,target) {
   const bullet = new THREE.Group();
 
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32,16,12),
+    new THREE.SphereGeometry(0.32,12,8),
     new THREE.MeshBasicMaterial({color:0x36eaff})
   );
   bullet.add(core);
 
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.68,16,12),
+    new THREE.SphereGeometry(0.68,12,8),
     new THREE.MeshBasicMaterial({
       color:0x773cff,
       transparent:true,
@@ -764,7 +751,6 @@ function fireUFOBullet() {
   target.y += 0.9;
 
   createEnergyBullet(origin,target);
-  console.log("UFO fired energy bullet!");
 }
 
 function spawnUFO() {
@@ -789,8 +775,6 @@ function spawnUFO() {
   activeUFO = ufo;
   ufoLifetime = UFO_ACTIVE_TIME;
   ufoAttackTimer = 1.1;
-
-  console.log("UFO ATTACK STARTED!");
 }
 
 function removeUFO() {
@@ -802,8 +786,6 @@ function removeUFO() {
   ufoSpawnTimer =
     UFO_SPAWN_MIN+
     Math.random()*(UFO_SPAWN_MAX-UFO_SPAWN_MIN);
-
-  console.log("UFO disappeared");
 }
 
 function removeBullet(index) {
@@ -824,8 +806,6 @@ function hitByUFO() {
   speedHitCooldown = 1.1;
   speedRecoveryTimer = UFO_PENALTY_TIME;
   speed *= UFO_SPEED_PENALTY;
-
-  console.log("UFO HIT! Temporary speed reduction.");
 
   const display = document.querySelector("#ah-cash");
   if (display) {
@@ -932,14 +912,11 @@ function loadEngineAudio() {
   engineAudioLoading = true;
   engineAudio.src = ENGINE_AUDIO_PATH;
   engineAudio.load();
-
-  console.log("AFTERHOURS: Loading V10 engine audio");
 }
 
 engineAudio.addEventListener("canplay",() => {
   engineAudioLoaded = true;
   engineAudioLoading = false;
-  console.log("AFTERHOURS: V10 engine audio ready");
 });
 
 engineAudio.addEventListener("error",() => {
@@ -966,10 +943,7 @@ function updateEngineAudio(delta) {
   if (!started) return;
 
   const engineActive = mobileAutoDrive || keys.gas;
-
-  const speedRatio = THREE.MathUtils.clamp(
-    speed/MAX_SPEED,0,1
-  );
+  const speedRatio = THREE.MathUtils.clamp(speed/MAX_SPEED,0,1);
 
   const targetVolume = engineActive
     ? 0.12+speedRatio*0.20
@@ -1022,10 +996,7 @@ controls.style.cssText = `
   padding:0 22px;box-sizing:border-box;z-index:30;
 `;
 
-controls.innerHTML = `
-  <button data-control="brake">BRAKE</button>
-`;
-
+controls.innerHTML = `<button data-control="brake">BRAKE</button>`;
 document.body.appendChild(controls);
 
 const brakeButton = controls.querySelector('[data-control="brake"]');
@@ -1061,7 +1032,6 @@ renderer.domElement.addEventListener("pointerdown",event => {
 
   steeringPointerId = event.pointerId;
   steeringStartX = event.clientX;
-
   renderer.domElement.setPointerCapture?.(event.pointerId);
 });
 
@@ -1093,9 +1063,9 @@ renderer.domElement.addEventListener("lostpointercapture",releaseSteering);
 window.addEventListener("keydown",event => {
   const key = event.key.toLowerCase();
 
-  if ([
-    "arrowleft","arrowright","arrowup","arrowdown"," "
-  ].includes(key)) event.preventDefault();
+  if (["arrowleft","arrowright","arrowup","arrowdown"," "].includes(key)) {
+    event.preventDefault();
+  }
 
   if (key==="arrowleft" || key==="a") keys.left = true;
   if (key==="arrowright" || key==="d") keys.right = true;
@@ -1214,7 +1184,6 @@ function updateDriving(delta) {
   }
 
   const speedDisplay = document.querySelector("#ah-speed");
-
   if (speedDisplay) {
     speedDisplay.textContent = String(
       Math.round(speed*160)
@@ -1222,7 +1191,6 @@ function updateDriving(delta) {
   }
 
   const ufoStatus = document.querySelector("#ah-ufo-status");
-
   if (ufoStatus) {
     if (speedRecoveryTimer>0) {
       ufoStatus.textContent = "⚡ SPEED RECOVERING";
@@ -1238,6 +1206,12 @@ function updateDriving(delta) {
 // ==========================================
 
 function updateCash(delta,elapsedTime) {
+  let farthest = Infinity;
+
+  for (const item of cashPickups) {
+    if (item.position.z < farthest) farthest = item.position.z;
+  }
+
   for (const pickup of cashPickups) {
     pickup.rotation.y += pickup.userData.spinSpeed*delta;
 
@@ -1252,35 +1226,26 @@ function updateCash(delta,elapsedTime) {
       cashTotal += CASH_VALUE;
 
       const cashDisplay = document.querySelector("#ah-cash");
-
       if (cashDisplay) {
         cashDisplay.textContent =
           "CASH: $"+cashTotal.toLocaleString("en-US");
         cashDisplay.style.color = "#66ff9a";
       }
 
-      console.log("Cash collected! Total:",cashTotal);
-
-      const farthest = Math.min(
-        ...cashPickups.map(item=>item.position.z)
-      );
-
       pickup.position.z = farthest-22-Math.random()*18;
       pickup.position.x = randomCashX();
       pickup.userData.baseY = 1.4+Math.random()*2.2;
       pickup.position.y = pickup.userData.baseY;
       pickup.userData.floatOffset = Math.random()*Math.PI*2;
+      farthest = pickup.position.z;
 
     } else if (pickup.position.z>car.position.z+20) {
-      const farthest = Math.min(
-        ...cashPickups.map(item=>item.position.z)
-      );
-
       pickup.position.z = farthest-22-Math.random()*18;
       pickup.position.x = randomCashX();
       pickup.userData.baseY = 1.4+Math.random()*2.2;
       pickup.position.y = pickup.userData.baseY;
       pickup.userData.floatOffset = Math.random()*Math.PI*2;
+      farthest = pickup.position.z;
     }
   }
 }
@@ -1290,18 +1255,21 @@ function updateCash(delta,elapsedTime) {
 // ==========================================
 
 function updateEndlessWorld() {
+  let farthest = Infinity;
+
+  for (const planet of roadsidePlanets) {
+    if (planet.position.z < farthest) farthest = planet.position.z;
+  }
+
   for (const planet of roadsidePlanets) {
     if (planet.position.z>car.position.z+35) {
-      const farthest = Math.min(
-        ...roadsidePlanets.map(p=>p.position.z)
-      );
-
-      planet.position.z = farthest-55-Math.random()*25;
+      planet.position.z = farthest-75-Math.random()*25;
       planet.position.x =
         planet.userData.side*(23+Math.random()*10);
       planet.position.y = 8+Math.random()*12;
 
       changePlanetType(planet);
+      farthest = planet.position.z;
     }
   }
 }
@@ -1318,18 +1286,20 @@ function updatePlanets(delta) {
 }
 
 // ==========================================
-// CAMERA
+// CAMERA — REUSED VECTOR
 // ==========================================
 
+const cameraTarget = new THREE.Vector3();
+
 function updateCamera(delta) {
-  const targetPosition = new THREE.Vector3(
+  cameraTarget.set(
     car.position.x*0.45,
     5.5,
     car.position.z+11
   );
 
   camera.position.lerp(
-    targetPosition,Math.min(1,delta*3)
+    cameraTarget,Math.min(1,delta*3)
   );
 
   camera.lookAt(
@@ -1347,7 +1317,7 @@ window.addEventListener("resize",() => {
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));
+  renderer.setPixelRatio(RENDER_PIXEL_RATIO);
 });
 
 // ==========================================
@@ -1380,7 +1350,6 @@ function animate() {
   updateEndlessWorld();
   updatePlanets(delta);
 
-  // NEW ASTEROID SYSTEM
   updateAsteroids(delta);
   recycleAsteroids();
 
@@ -1394,5 +1363,5 @@ function animate() {
 animate();
 
 console.log(
-  "AFTERHOURS 0.9.10 ASTEROID FIELD + AUTO DRIVE initialized"
+  "AFTERHOURS 0.9.11 INTEL GPU OPTIMIZED initialized"
 );
