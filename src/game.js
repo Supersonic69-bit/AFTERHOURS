@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.4 | SPACE COLLECTOR BASE
+// BUILD 0.9.5 | SPACE CASH COLLECTOR
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -290,7 +290,6 @@ const car = new THREE.Group();
 scene.add(car);
 car.position.set(0, 0, 3);
 
-// Fallback while GLB loads
 const fallback = new THREE.Group();
 car.add(fallback);
 
@@ -385,7 +384,6 @@ gltfLoader.load(
       -originalCenter.z * scale
     );
 
-    // Existing supercar direction preserved
     model.rotation.y = -Math.PI / 2;
 
     model.traverse(object => {
@@ -419,6 +417,125 @@ gltfLoader.load(
   error => {
     console.error("Supercar failed to load:", error);
     fallback.visible = true;
+  }
+);
+
+// ==========================================
+// SPACE CASH SYSTEM
+// ==========================================
+
+const CASH_MODEL_PATH =
+  "../assets/planets/cash/model-5321cfcbeac1.glb";
+
+const CASH_VALUE = 100;
+const CASH_COUNT = 18;
+
+const cashPickups = [];
+let cashTotal = 0;
+let cashTemplate = null;
+
+function randomCashX() {
+  const positions = [-4.2, 0, 4.2];
+  return positions[Math.floor(Math.random() * positions.length)];
+}
+
+function createCashPickup(z, index) {
+  const pickup = new THREE.Group();
+
+  const model = cashTemplate.clone(true);
+
+  pickup.add(model);
+
+  pickup.position.set(
+    randomCashX(),
+    1.4 + Math.random() * 2.2,
+    z
+  );
+
+  pickup.rotation.y = Math.random() * Math.PI * 2;
+
+  pickup.userData = {
+    baseY:pickup.position.y,
+    floatOffset:Math.random() * Math.PI * 2,
+    spinSpeed:0.35 + Math.random() * 0.5,
+    index
+  };
+
+  scene.add(pickup);
+  cashPickups.push(pickup);
+}
+
+function spawnCashField() {
+  for (let i = 0; i < CASH_COUNT; i++) {
+    createCashPickup(-25 - i * 19, i);
+  }
+
+  console.log("AFTERHOURS: Cash field created");
+}
+
+const cashLoader = new GLTFLoader();
+
+cashLoader.load(
+  CASH_MODEL_PATH,
+
+  gltf => {
+    const model = gltf.scene;
+
+    model.updateMatrixWorld(true);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(center);
+
+    const longestDimension = Math.max(
+      size.x,
+      size.y,
+      size.z
+    );
+
+    if (!longestDimension) {
+      console.error("Invalid cash model dimensions");
+      return;
+    }
+
+    const scale = 2.4 / longestDimension;
+
+    model.scale.setScalar(scale);
+
+    model.position.set(
+      -center.x * scale,
+      -center.y * scale,
+      -center.z * scale
+    );
+
+    model.traverse(object => {
+      if (object.isMesh) {
+        object.frustumCulled = false;
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+
+    cashTemplate = model;
+    spawnCashField();
+
+    console.log("AFTERHOURS: Cash model loaded!", size);
+  },
+
+  progress => {
+    if (progress.total) {
+      console.log(
+        "Cash loading:",
+        Math.round(progress.loaded / progress.total * 100) + "%"
+      );
+    }
+  },
+
+  error => {
+    console.error("Cash model failed to load:", error);
   }
 );
 
@@ -461,11 +578,18 @@ hud.style.cssText = `
 
 hud.innerHTML = `
   <div style="opacity:.65;font-size:10px">AFTERHOURS</div>
+
   <div id="ah-speed"
        style="font-size:30px;font-weight:700;margin-top:5px">
     000
   </div>
+
   <div style="font-size:9px;opacity:.55">KM/H</div>
+
+  <div id="ah-cash"
+       style="font-size:17px;font-weight:700;margin-top:14px;color:#66ff9a">
+    CASH: $0
+  </div>
 `;
 
 document.body.appendChild(hud);
@@ -637,6 +761,72 @@ function updateDriving(delta) {
 }
 
 // ==========================================
+// CASH COLLECTION & RECYCLING
+// ==========================================
+
+function updateCash(delta, elapsedTime) {
+  for (const pickup of cashPickups) {
+    pickup.rotation.y += pickup.userData.spinSpeed * delta;
+
+    pickup.position.y =
+      pickup.userData.baseY +
+      Math.sin(
+        elapsedTime * 1.5 + pickup.userData.floatOffset
+      ) * 0.35;
+
+    // Collect cash when car gets close
+    const distanceX = Math.abs(
+      pickup.position.x - car.position.x
+    );
+
+    const distanceZ = Math.abs(
+      pickup.position.z - car.position.z
+    );
+
+    if (distanceX < 2.3 && distanceZ < 2.8) {
+      cashTotal += CASH_VALUE;
+
+      const cashDisplay = document.querySelector("#ah-cash");
+
+      if (cashDisplay) {
+        cashDisplay.textContent =
+          "CASH: $" + cashTotal.toLocaleString("en-US");
+      }
+
+      console.log("Cash collected! Total:", cashTotal);
+
+      // Move collected bundle ahead into space again
+      const farthest = Math.min(
+        ...cashPickups.map(item => item.position.z)
+      );
+
+      pickup.position.z =
+        farthest - 22 - Math.random() * 18;
+
+      pickup.position.x = randomCashX();
+      pickup.userData.baseY = 1.4 + Math.random() * 2.2;
+      pickup.position.y = pickup.userData.baseY;
+      pickup.userData.floatOffset = Math.random() * Math.PI * 2;
+    }
+
+    // Recycle bundles that have passed behind the car
+    else if (pickup.position.z > car.position.z + 20) {
+      const farthest = Math.min(
+        ...cashPickups.map(item => item.position.z)
+      );
+
+      pickup.position.z =
+        farthest - 22 - Math.random() * 18;
+
+      pickup.position.x = randomCashX();
+      pickup.userData.baseY = 1.4 + Math.random() * 2.2;
+      pickup.position.y = pickup.userData.baseY;
+      pickup.userData.floatOffset = Math.random() * Math.PI * 2;
+    }
+  }
+}
+
+// ==========================================
 // ENDLESS SPACE WORLD
 // ==========================================
 
@@ -731,10 +921,12 @@ function animate() {
   requestAnimationFrame(animate);
 
   const delta = Math.min(clock.getDelta(), 0.04);
+  const elapsedTime = clock.elapsedTime;
 
   updateDriving(delta);
   updateEndlessWorld();
   updatePlanets(delta);
+  updateCash(delta, elapsedTime);
   updateCamera(delta);
 
   renderer.render(scene, camera);
@@ -742,4 +934,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.4 SPACE COLLECTOR initialized");
+console.log("AFTERHOURS 0.9.5 SPACE CASH COLLECTOR initialized");
