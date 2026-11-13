@@ -4,12 +4,16 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.1 | SUPERCAR HOTFIX
+// BUILD 0.9.2 | SILENT SUPERCAR EDITION
 // ==========================================
 
 const game = document.querySelector("#game");
 if (!game) throw new Error("Missing #game element");
 game.innerHTML = "";
+
+// ==========================================
+// IPHONE PROTECTION
+// ==========================================
 
 document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("selectstart", e => e.preventDefault());
@@ -24,17 +28,27 @@ style.textContent = `
   -webkit-tap-highlight-color:transparent!important;
 }
 html,body {
-  margin:0;padding:0;overflow:hidden;
-  background:#03050b;touch-action:manipulation;
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#03050b;
+  touch-action:manipulation;
 }
 #game {
-  position:fixed;inset:0;overflow:hidden;
-  touch-action:none;z-index:1;
+  position:fixed;
+  inset:0;
+  overflow:hidden;
+  touch-action:none;
+  z-index:1;
 }
 #game canvas {
-  position:absolute;inset:0;
-  display:block;width:100%;height:100%;
-  touch-action:none;z-index:1;
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  touch-action:none;
+  z-index:1;
 }
 #intro {z-index:10;}
 #ah-hud,#ah-hud * {
@@ -43,10 +57,15 @@ html,body {
 }
 #ah-controls {pointer-events:none;}
 #ah-controls button {
-  pointer-events:auto;min-width:58px;height:58px;
+  pointer-events:auto;
+  min-width:58px;
+  height:58px;
   border:1px solid rgba(255,255,255,.35);
-  border-radius:12px;background:rgba(8,12,20,.78);
-  color:white;font-size:14px;font-weight:700;
+  border-radius:12px;
+  background:rgba(8,12,20,.78);
+  color:white;
+  font-size:14px;
+  font-weight:700;
   touch-action:none;
 }
 #ah-controls button:active {
@@ -64,8 +83,12 @@ scene.background = new THREE.Color(0x03050b);
 scene.fog = new THREE.Fog(0x111820, 100, 520);
 
 const camera = new THREE.PerspectiveCamera(
-  65, window.innerWidth / window.innerHeight, 0.1, 1400
+  65,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1400
 );
+
 camera.position.set(0, 5.5, 14);
 
 const renderer = new THREE.WebGLRenderer({
@@ -104,7 +127,9 @@ textureLoader.load(
 // LIGHTING
 // ==========================================
 
-scene.add(new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8));
+scene.add(
+  new THREE.HemisphereLight(0xb9c9d8, 0x252a35, 1.8)
+);
 
 const sunlight = new THREE.DirectionalLight(0xffffff, 2.2);
 sunlight.position.set(-30, 60, 25);
@@ -147,7 +172,8 @@ for (const [name, path] of Object.entries(planetFiles)) {
     texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(
-        renderer.capabilities.getMaxAnisotropy(), 8
+        renderer.capabilities.getMaxAnisotropy(),
+        8
       );
 
       planetTextures[name] = texture;
@@ -158,6 +184,8 @@ for (const [name, path] of Object.entries(planetFiles)) {
           planet.userData.surface.material.needsUpdate = true;
         }
       }
+
+      console.log("Planet texture loaded:", name);
     },
     undefined,
     error => console.error("Planet texture failed:", name, error)
@@ -169,19 +197,23 @@ for (const [name, path] of Object.entries(planetFiles)) {
 // ==========================================
 
 const asphaltMat = new THREE.MeshStandardMaterial({
-  color:0x24292d, roughness:0.95
+  color:0x24292d,
+  roughness:0.95
 });
 
 const groundMat = new THREE.MeshStandardMaterial({
-  color:0x303b37, roughness:1
+  color:0x303b37,
+  roughness:1
 });
 
 const lineMat = new THREE.MeshStandardMaterial({
-  color:0xd8d8d2, roughness:0.8
+  color:0xd8d8d2,
+  roughness:0.8
 });
 
 const curbMat = new THREE.MeshStandardMaterial({
-  color:0x777b7b, roughness:0.9
+  color:0x777b7b,
+  roughness:0.9
 });
 
 // ==========================================
@@ -191,6 +223,7 @@ const curbMat = new THREE.MeshStandardMaterial({
 const ROAD_WIDTH = 14;
 const SEGMENT_LENGTH = 180;
 const SEGMENT_COUNT = 7;
+
 const roadSegments = [];
 
 function createRoadSegment(z) {
@@ -198,9 +231,14 @@ function createRoadSegment(z) {
   group.position.z = z;
 
   const road = new THREE.Mesh(
-    new THREE.BoxGeometry(ROAD_WIDTH, 0.18, SEGMENT_LENGTH),
+    new THREE.BoxGeometry(
+      ROAD_WIDTH,
+      0.18,
+      SEGMENT_LENGTH
+    ),
     asphaltMat
   );
+
   road.position.y = -0.12;
   group.add(road);
 
@@ -208,6 +246,7 @@ function createRoadSegment(z) {
     new THREE.BoxGeometry(180, 0.1, SEGMENT_LENGTH),
     groundMat
   );
+
   ground.position.y = -0.28;
   group.add(ground);
 
@@ -216,7 +255,13 @@ function createRoadSegment(z) {
       new THREE.BoxGeometry(0.35, 0.25, SEGMENT_LENGTH),
       curbMat
     );
-    curb.position.set(side * (ROAD_WIDTH / 2 + 0.2), 0, 0);
+
+    curb.position.set(
+      side * (ROAD_WIDTH / 2 + 0.2),
+      0,
+      0
+    );
+
     group.add(curb);
   }
 
@@ -225,7 +270,9 @@ function createRoadSegment(z) {
 }
 
 for (let i = 0; i < SEGMENT_COUNT; i++) {
-  roadSegments.push(createRoadSegment(90 - i * SEGMENT_LENGTH));
+  roadSegments.push(
+    createRoadSegment(90 - i * SEGMENT_LENGTH)
+  );
 }
 
 // ==========================================
@@ -235,6 +282,7 @@ for (let i = 0; i < SEGMENT_COUNT; i++) {
 const DASH_SPACING = 18;
 const DASH_COUNT = 100;
 const dashes = [];
+
 const dashGeometry = new THREE.BoxGeometry(0.13, 0.025, 7);
 
 for (let i = 0; i < DASH_COUNT; i++) {
@@ -250,19 +298,24 @@ for (let i = 0; i < DASH_COUNT; i++) {
 
 function createRoadsidePlanet(side, z, index) {
   const group = new THREE.Group();
+
   const radius = 5.5 + Math.random() * 5.5;
   const type = planetTypes[index % planetTypes.length];
 
   const material = new THREE.MeshStandardMaterial({
-    color:0xffffff, roughness:0.95
+    color:0xffffff,
+    roughness:0.95
   });
 
-  if (planetTextures[type]) material.map = planetTextures[type];
+  if (planetTextures[type]) {
+    material.map = planetTextures[type];
+  }
 
   const sphere = new THREE.Mesh(
     new THREE.SphereGeometry(1, 40, 32),
     material
   );
+
   sphere.scale.setScalar(radius);
   sphere.rotation.z = Math.random() * Math.PI;
   group.add(sphere);
@@ -277,6 +330,7 @@ function createRoadsidePlanet(side, z, index) {
       depthWrite:false
     })
   );
+
   glow.scale.setScalar(radius);
   group.add(glow);
 
@@ -300,8 +354,15 @@ function createRoadsidePlanet(side, z, index) {
 for (let i = 0; i < 24; i++) {
   const side = i % 2 === 0 ? -1 : 1;
   const z = 100 - Math.floor(i / 2) * 55;
-  roadsidePlanets.push(createRoadsidePlanet(side, z, i));
+
+  roadsidePlanets.push(
+    createRoadsidePlanet(side, z, i)
+  );
 }
+
+// ==========================================
+// CHANGE PLANET TYPE
+// ==========================================
 
 function changePlanetType(planet) {
   const nextType = planetTypes[
@@ -315,9 +376,12 @@ function changePlanetType(planet) {
   material.color.set(0xffffff);
   material.needsUpdate = true;
 
-  planet.children[1].material.color.set(planetColors[nextType]);
+  planet.children[1].material.color.set(
+    planetColors[nextType]
+  );
 
   const radius = 5.5 + Math.random() * 5.5;
+
   planet.userData.surface.scale.setScalar(radius);
   planet.children[1].scale.setScalar(radius * 1.045);
 }
@@ -330,30 +394,39 @@ const car = new THREE.Group();
 scene.add(car);
 car.position.set(0, 0, 3);
 
-// Fallback car, visible until GLB is loaded
+// Temporary fallback while the GLB loads
 const fallback = new THREE.Group();
 car.add(fallback);
 
 const fallbackBody = new THREE.Mesh(
   new THREE.BoxGeometry(2, 0.65, 4.2),
   new THREE.MeshStandardMaterial({
-    color:0x171a1d, metalness:0.7, roughness:0.28
+    color:0x171a1d,
+    metalness:0.7,
+    roughness:0.28
   })
 );
+
 fallbackBody.position.y = 0.75;
 fallback.add(fallbackBody);
 
 const fallbackCabin = new THREE.Mesh(
   new THREE.BoxGeometry(1.55, 0.65, 1.9),
   new THREE.MeshStandardMaterial({
-    color:0x263b49, metalness:0.5, roughness:0.2
+    color:0x263b49,
+    metalness:0.5,
+    roughness:0.2
   })
 );
+
 fallbackCabin.position.set(0, 1.35, -0.25);
 fallback.add(fallbackCabin);
 
 const fallbackWheels = [];
-const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
+
+const wheelMat = new THREE.MeshStandardMaterial({
+  color:0x080808
+});
 
 for (const x of [-1.05, 1.05]) {
   for (const z of [-1.35, 1.35]) {
@@ -361,6 +434,7 @@ for (const x of [-1.05, 1.05]) {
       new THREE.CylinderGeometry(0.42, 0.42, 0.28, 20),
       wheelMat
     );
+
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(x, 0.43, z);
     fallback.add(wheel);
@@ -369,11 +443,8 @@ for (const x of [-1.05, 1.05]) {
 }
 
 // ==========================================
-// LOAD THE DOWNLOADED GLB SUPERCAR
+// REAL SUPERCAR GLB
 // ==========================================
-
-// Current GitHub path:
-// assets/planets/cars/generic-mid-engine-supercar.glb
 
 const CAR_MODEL_PATH =
   "../assets/planets/cars/generic-mid-engine-supercar.glb";
@@ -384,6 +455,7 @@ let supercarModel = null;
 
 gltfLoader.load(
   CAR_MODEL_PATH,
+
   gltf => {
     const model = gltf.scene;
 
@@ -403,11 +475,12 @@ gltfLoader.load(
     );
 
     if (!longestDimension || !originalSize.y) {
-      console.error("Supercar model has invalid dimensions.");
+      console.error("Invalid supercar dimensions");
       return;
     }
 
     const scale = 4.6 / longestDimension;
+
     model.scale.setScalar(scale);
 
     model.position.set(
@@ -416,8 +489,8 @@ gltfLoader.load(
       -originalCenter.z * scale
     );
 
-    // Default orientation: face the road's forward direction.
-    model.rotation.y = Math.PI;
+    // Rotate the car 90 degrees to align with the road.
+    model.rotation.y = Math.PI / 2;
 
     model.traverse(object => {
       if (object.isMesh) {
@@ -437,6 +510,7 @@ gltfLoader.load(
 
     console.log("AFTERHOURS: Supercar loaded!", originalSize);
   },
+
   progress => {
     if (progress.total) {
       console.log(
@@ -445,6 +519,7 @@ gltfLoader.load(
       );
     }
   },
+
   error => {
     console.error("Supercar failed to load:", error);
     fallback.visible = true;
@@ -469,82 +544,6 @@ const keys = {
 };
 
 // ==========================================
-// ENGINE SOUND
-// ==========================================
-
-let audioContext = null;
-let engineOscillator = null;
-let engineHarmonic = null;
-let engineFilter = null;
-let engineGain = null;
-let engineStarted = false;
-
-function startEngineSound() {
-  if (engineStarted) {
-    if (audioContext.state === "suspended") {
-      audioContext.resume();
-    }
-    return;
-  }
-
-  const AudioContextClass =
-    window.AudioContext || window.webkitAudioContext;
-
-  if (!AudioContextClass) {
-    console.warn("Audio not supported by this browser.");
-    return;
-  }
-
-  audioContext = new AudioContextClass();
-
-  engineOscillator = audioContext.createOscillator();
-  engineHarmonic = audioContext.createOscillator();
-  engineFilter = audioContext.createBiquadFilter();
-  engineGain = audioContext.createGain();
-
-  engineOscillator.type = "sawtooth";
-  engineHarmonic.type = "triangle";
-
-  engineFilter.type = "lowpass";
-  engineFilter.frequency.value = 400;
-
-  engineOscillator.frequency.value = 48;
-  engineHarmonic.frequency.value = 96;
-
-  engineGain.gain.value = 0.0001;
-
-  engineOscillator.connect(engineFilter);
-  engineHarmonic.connect(engineFilter);
-  engineFilter.connect(engineGain);
-  engineGain.connect(audioContext.destination);
-
-  engineOscillator.start();
-  engineHarmonic.start();
-
-  audioContext.resume();
-  engineStarted = true;
-}
-
-function updateEngineSound() {
-  if (!engineStarted || !audioContext) return;
-
-  const now = audioContext.currentTime;
-  const rpm = 48 + speed * 105 + (keys.gas ? 28 : 0);
-
-  engineOscillator.frequency.setTargetAtTime(rpm, now, 0.08);
-  engineHarmonic.frequency.setTargetAtTime(rpm * 2, now, 0.08);
-
-  engineFilter.frequency.setTargetAtTime(
-    350 + speed * 500 + (keys.gas ? 250 : 0),
-    now,
-    0.1
-  );
-
-  const volume = started ? 0.045 + speed * 0.025 : 0.0001;
-  engineGain.gain.setTargetAtTime(volume, now, 0.12);
-}
-
-// ==========================================
 // HUD
 // ==========================================
 
@@ -552,16 +551,24 @@ const hud = document.createElement("div");
 hud.id = "ah-hud";
 
 hud.style.cssText = `
-  position:fixed;top:18px;left:18px;z-index:20;
-  color:white;font-family:Arial,sans-serif;
-  font-size:14px;letter-spacing:2px;
-  display:none;pointer-events:none;
+  position:fixed;
+  top:18px;
+  left:18px;
+  z-index:20;
+  color:white;
+  font-family:Arial,sans-serif;
+  font-size:14px;
+  letter-spacing:2px;
+  display:none;
+  pointer-events:none;
 `;
 
 hud.innerHTML = `
   <div style="opacity:.65;font-size:10px">AFTERHOURS</div>
   <div id="ah-speed"
-       style="font-size:30px;font-weight:700;margin-top:5px">000</div>
+       style="font-size:30px;font-weight:700;margin-top:5px">
+    000
+  </div>
   <div style="font-size:9px;opacity:.55">KM/H</div>
 `;
 
@@ -575,9 +582,15 @@ const controls = document.createElement("div");
 controls.id = "ah-controls";
 
 controls.style.cssText = `
-  position:fixed;bottom:25px;left:0;width:100%;
-  display:none;justify-content:space-between;
-  padding:0 22px;box-sizing:border-box;z-index:30;
+  position:fixed;
+  bottom:25px;
+  left:0;
+  width:100%;
+  display:none;
+  justify-content:space-between;
+  padding:0 22px;
+  box-sizing:border-box;
+  z-index:30;
 `;
 
 controls.innerHTML = `
@@ -634,14 +647,13 @@ window.addEventListener("keyup", event => {
 });
 
 // ==========================================
-// START GAME
+// START GAME — NO AUDIO
 // ==========================================
 
 function startGame() {
   if (started) return;
 
   started = true;
-  startEngineSound();
 
   hud.style.display = "block";
   controls.style.display = "flex";
@@ -660,13 +672,18 @@ function startGame() {
 
 const startButton = [
   ...document.querySelectorAll("button")
-].find(button => /start engine/i.test(button.textContent.trim()));
+].find(button =>
+  /start engine/i.test(button.textContent.trim())
+);
 
 if (startButton) {
   startButton.addEventListener("click", startGame);
 } else {
   const intro = document.querySelector("#intro");
-  if (intro) intro.addEventListener("click", startGame, {once:true});
+
+  if (intro) {
+    intro.addEventListener("click", startGame, {once:true});
+  }
 }
 
 // ==========================================
@@ -680,23 +697,34 @@ function updateDriving(delta) {
   if (keys.brake) speed -= 2.5 * delta;
 
   speed -= 0.16 * delta;
+
   speed = THREE.MathUtils.clamp(speed, 0, MAX_SPEED);
 
   let direction = 0;
+
   if (keys.left) direction -= 1;
   if (keys.right) direction += 1;
 
   steering = THREE.MathUtils.lerp(
-    steering, direction, Math.min(1, delta * 5)
+    steering,
+    direction,
+    Math.min(1, delta * 5)
   );
 
   car.position.x += steering * (0.08 + speed * 0.11);
-  car.position.x = THREE.MathUtils.clamp(car.position.x, -5.1, 5.1);
+
+  car.position.x = THREE.MathUtils.clamp(
+    car.position.x,
+    -5.1,
+    5.1
+  );
 
   car.position.z -= speed * 28 * delta;
 
   car.rotation.z = THREE.MathUtils.lerp(
-    car.rotation.z, -steering * 0.09, delta * 4
+    car.rotation.z,
+    -steering * 0.09,
+    delta * 4
   );
 
   for (const wheel of fallbackWheels) {
@@ -710,8 +738,6 @@ function updateDriving(delta) {
       Math.round(speed * 160)
     ).padStart(3, "0");
   }
-
-  updateEngineSound();
 }
 
 // ==========================================
@@ -724,6 +750,7 @@ function updateEndlessWorld() {
       const farthest = Math.min(
         ...roadSegments.map(s => s.position.z)
       );
+
       segment.position.z = farthest - SEGMENT_LENGTH;
     }
   }
@@ -733,6 +760,7 @@ function updateEndlessWorld() {
       const farthest = Math.min(
         ...dashes.map(d => d.position.z)
       );
+
       dash.position.z = farthest - DASH_SPACING;
     }
   }
@@ -743,9 +771,12 @@ function updateEndlessWorld() {
         ...roadsidePlanets.map(p => p.position.z)
       );
 
-      planet.position.z = farthest - 55 - Math.random() * 25;
+      planet.position.z =
+        farthest - 55 - Math.random() * 25;
+
       planet.position.x =
         planet.userData.side * (23 + Math.random() * 10);
+
       planet.position.y = 8 + Math.random() * 12;
 
       changePlanetType(planet);
@@ -776,7 +807,8 @@ function updateCamera(delta) {
   );
 
   camera.position.lerp(
-    targetPosition, Math.min(1, delta * 3)
+    targetPosition,
+    Math.min(1, delta * 3)
   );
 
   camera.lookAt(
@@ -795,7 +827,10 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, 1.7)
+  );
 });
 
 // ==========================================
@@ -831,4 +866,4 @@ function animate() {
 
 animate();
 
-console.log("AFTERHOURS 0.9.1 initialized");
+console.log("AFTERHOURS 0.9.2 initialized");
