@@ -39,7 +39,7 @@ const lampMat = new THREE.MeshStandardMaterial({
 });
 
 // ==========================================
-// LUXURY HIGHWAY
+// LUXURY MIDNIGHT HIGHWAY
 // ==========================================
 
 const ROAD_WIDTH = 14;
@@ -52,37 +52,66 @@ function createRoadSegment(z) {
   const group = new THREE.Group();
   group.position.z = z;
 
-  // Main asphalt
+  // Main asphalt road
   const road = new THREE.Mesh(
-    new THREE.BoxGeometry(ROAD_WIDTH, 0.18, SEGMENT_LENGTH),
+    new THREE.BoxGeometry(
+      ROAD_WIDTH,
+      0.18,
+      SEGMENT_LENGTH
+    ),
     asphaltMat
   );
+
   road.position.y = -0.12;
   group.add(road);
 
-  // Road shoulders
+  // Roadside structures
   for (const side of [-1, 1]) {
+
+    // Road shoulder
     const shoulder = new THREE.Mesh(
-      new THREE.BoxGeometry(3.5, 0.12, SEGMENT_LENGTH),
+      new THREE.BoxGeometry(
+        3.5,
+        0.12,
+        SEGMENT_LENGTH
+      ),
       shoulderMat
     );
 
-    shoulder.position.set(side * 8.75, -0.20, 0);
+    shoulder.position.set(
+      side * 8.75,
+      -0.20,
+      0
+    );
+
     group.add(shoulder);
 
-    // Solid white edge line
+    // White road edge line
     const edgeLine = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.025, SEGMENT_LENGTH),
+      new THREE.BoxGeometry(
+        0.14,
+        0.025,
+        SEGMENT_LENGTH
+      ),
       lineMat
     );
 
-    edgeLine.position.set(side * 6.65, 0.005, 0);
+    edgeLine.position.set(
+      side * 6.65,
+      0.005,
+      0
+    );
+
     group.add(edgeLine);
 
-    // Guardrail posts
+    // Guardrail support posts
     for (let i = 0; i < 10; i++) {
       const post = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 1.1, 0.18),
+        new THREE.BoxGeometry(
+          0.16,
+          1.1,
+          0.18
+        ),
         poleMat
       );
 
@@ -95,51 +124,84 @@ function createRoadSegment(z) {
       group.add(post);
     }
 
-    // Continuous metallic guardrail
+    // Metallic guardrail
     const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.28, SEGMENT_LENGTH),
+      new THREE.BoxGeometry(
+        0.22,
+        0.28,
+        SEGMENT_LENGTH
+      ),
       curbMat
     );
 
-    rail.position.set(side * 10.2, 0.85, 0);
+    rail.position.set(
+      side * 10.2,
+      0.85,
+      0
+    );
+
     group.add(rail);
 
-    // Streetlight poles
+    // Streetlights — lightweight version
     for (let i = 0; i < 5; i++) {
-      const lightZ = -SEGMENT_LENGTH / 2 + 18 + i * 36;
 
+      const lightZ =
+        -SEGMENT_LENGTH / 2 + 18 + i * 36;
+
+      // Light pole
       const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.09, 0.13, 7, 8),
+        new THREE.CylinderGeometry(
+          0.09,
+          0.13,
+          7,
+          8
+        ),
         poleMat
       );
 
-      pole.position.set(side * 11.5, 3.5, lightZ);
+      pole.position.set(
+        side * 11.5,
+        3.5,
+        lightZ
+      );
+
       group.add(pole);
 
+      // Light arm
       const arm = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 0.10, 0.10),
+        new THREE.BoxGeometry(
+          1.2,
+          0.10,
+          0.10
+        ),
         poleMat
       );
 
-      arm.position.set(side * 10.95, 6.9, lightZ);
+      arm.position.set(
+        side * 10.95,
+        6.9,
+        lightZ
+      );
+
       group.add(arm);
 
+      // Glowing lamp — no PointLight
       const lamp = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.13, 0.38),
+        new THREE.BoxGeometry(
+          0.8,
+          0.13,
+          0.38
+        ),
         lampMat
       );
 
-      lamp.position.set(side * 10.35, 6.85, lightZ);
-      group.add(lamp);
-
-      const glow = new THREE.PointLight(
-        0xffd99b,
-        5,
-        24
+      lamp.position.set(
+        side * 10.35,
+        6.85,
+        lightZ
       );
 
-      glow.position.set(side * 10.35, 6.5, lightZ);
-      group.add(glow);
+      group.add(lamp);
     }
   }
 
@@ -147,9 +209,12 @@ function createRoadSegment(z) {
   return group;
 }
 
+// Create road segments
 for (let i = 0; i < SEGMENT_COUNT; i++) {
   roadSegments.push(
-    createRoadSegment(90 - i * SEGMENT_LENGTH)
+    createRoadSegment(
+      90 - i * SEGMENT_LENGTH
+    )
   );
 }
 
@@ -159,6 +224,7 @@ for (let i = 0; i < SEGMENT_COUNT; i++) {
 
 const DASH_SPACING = 18;
 const DASH_COUNT = 100;
+
 const dashes = [];
 
 const dashGeometry = new THREE.BoxGeometry(
@@ -168,7 +234,11 @@ const dashGeometry = new THREE.BoxGeometry(
 );
 
 for (let i = 0; i < DASH_COUNT; i++) {
-  const dash = new THREE.Mesh(dashGeometry, lineMat);
+
+  const dash = new THREE.Mesh(
+    dashGeometry,
+    lineMat
+  );
 
   dash.position.set(
     0,
