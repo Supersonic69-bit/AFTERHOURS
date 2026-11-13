@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GL
 
 // ==========================================
 // AFTERHOURS — KALYUG
-// BUILD 0.9.11 | INTEL GPU OPTIMIZATION
+// BUILD 0.9.12 | ORIGINAL GAME + GPU OPTIMIZATION
 // ==========================================
 
 const game = document.querySelector("#game");
@@ -19,9 +19,14 @@ let steering = 0;
 let cashTotal = 0;
 
 const MAX_SPEED = 2.1;
-const RENDER_PIXEL_RATIO = 1.0;
+const MAX_PIXEL_RATIO = 1.25;
 
-const keys = { left:false, right:false, gas:false, brake:false };
+const keys = {
+  left:false,
+  right:false,
+  gas:false,
+  brake:false
+};
 
 // ==========================================
 // INPUT PROTECTION
@@ -70,7 +75,7 @@ html,body {
 document.head.appendChild(style);
 
 // ==========================================
-// SCENE + OPTIMIZED RENDERER
+// SCENE
 // ==========================================
 
 const scene = new THREE.Scene();
@@ -78,31 +83,43 @@ scene.background = new THREE.Color(0x03050b);
 scene.fog = new THREE.Fog(0x111820, 100, 520);
 
 const camera = new THREE.PerspectiveCamera(
-  65, window.innerWidth / window.innerHeight, 0.1, 1400
+  65,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  900
 );
 camera.position.set(0, 5.5, 14);
+
+// ==========================================
+// OPTIMIZED WEBGL RENDERER
+// ==========================================
 
 const renderer = new THREE.WebGLRenderer({
   antialias:false,
   alpha:false,
-  powerPreference:"low-power",
+  powerPreference:"high-performance",
   stencil:false,
   depth:true
 });
 
-renderer.setPixelRatio(RENDER_PIXEL_RATIO);
+renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
+);
+
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = false;
+
 game.appendChild(renderer.domElement);
 
 const textureLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 
-// Reused geometries reduce GPU memory and setup overhead.
-const planetGeometry = new THREE.SphereGeometry(1, 24, 16);
-const planetGlowGeometry = new THREE.SphereGeometry(1.045, 20, 12);
+// Shared planet geometries reduce GPU memory overhead.
+const planetGeometry = new THREE.SphereGeometry(1, 40, 32);
+const planetGlowGeometry = new THREE.SphereGeometry(1.045, 32, 24);
 
 // ==========================================
 // SPACE BACKGROUND
@@ -167,7 +184,7 @@ for (const [name,path] of Object.entries(planetFiles)) {
     texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(
-        renderer.capabilities.getMaxAnisotropy(), 4
+        renderer.capabilities.getMaxAnisotropy(), 8
       );
 
       planetTextures[name] = texture;
@@ -178,15 +195,16 @@ for (const [name,path] of Object.entries(planetFiles)) {
           planet.userData.surface.material.needsUpdate = true;
         }
       }
-      console.log("Planet texture loaded:", name);
+
+      console.log("Planet texture loaded:",name);
     },
     undefined,
-    error => console.error("Planet texture failed:", name, error)
+    error => console.error("Planet texture failed:",name,error)
   );
 }
 
 // ==========================================
-// PLANETS — REDUCED DRAW COST
+// PLANETS — ORIGINAL COUNT: 24
 // ==========================================
 
 function createRoadsidePlanet(side,z,index) {
@@ -201,7 +219,7 @@ function createRoadsidePlanet(side,z,index) {
 
   if (planetTextures[type]) material.map = planetTextures[type];
 
-  const sphere = new THREE.Mesh(planetGeometry, material);
+  const sphere = new THREE.Mesh(planetGeometry,material);
   sphere.scale.setScalar(radius);
   sphere.rotation.z = Math.random() * Math.PI;
   group.add(sphere);
@@ -237,9 +255,9 @@ function createRoadsidePlanet(side,z,index) {
   return group;
 }
 
-for (let i=0; i<16; i++) {
+for (let i=0;i<24;i++) {
   const side = i % 2 === 0 ? -1 : 1;
-  const z = 100 - Math.floor(i/2)*75;
+  const z = 100 - Math.floor(i/2)*55;
   roadsidePlanets.push(createRoadsidePlanet(side,z,i));
 }
 
@@ -297,7 +315,7 @@ const wheelMat = new THREE.MeshStandardMaterial({color:0x080808});
 for (const x of [-1.05,1.05]) {
   for (const z of [-1.35,1.35]) {
     const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42,0.42,0.28,16),
+      new THREE.CylinderGeometry(0.42,0.42,0.28,20),
       wheelMat
     );
     wheel.rotation.z = Math.PI/2;
@@ -374,7 +392,7 @@ gltfLoader.load(
 );
 
 // ==========================================
-// SPACE CASH SYSTEM
+// SPACE CASH SYSTEM — ORIGINAL COUNT: 18
 // ==========================================
 
 const CASH_MODEL_PATH =
@@ -474,13 +492,13 @@ cashLoader.load(
 );
 
 // ==========================================
-// ASTEROID FIELD — INTEL OPTIMIZED
+// ASTEROID FIELD — ORIGINAL COUNT: 36
 // ==========================================
 
 const ASTEROID_MODEL_PATH =
   "../assets/planets/asteroid.glb";
 
-const ASTEROID_COUNT = 12;
+const ASTEROID_COUNT = 36;
 const asteroids = [];
 let asteroidTemplate = null;
 
@@ -528,13 +546,13 @@ function createAsteroid(z,index) {
 }
 
 function createAsteroidField() {
-  if (!asteroidTemplate || asteroids.length>0) return;
+  if (!asteroidTemplate || asteroids.length > 0) return;
 
   for (let i=0;i<ASTEROID_COUNT;i++) {
-    createAsteroid(85-i*55,i);
+    createAsteroid(85-i*26,i);
   }
 
-  console.log("AFTERHOURS: Optimized asteroid field created!");
+  console.log("AFTERHOURS: Asteroid field created!");
 }
 
 const asteroidLoader = new GLTFLoader();
@@ -593,7 +611,7 @@ asteroidLoader.load(
 );
 
 // ==========================================
-// ASTEROID ANIMATION
+// ASTEROID ROTATION
 // ==========================================
 
 function updateAsteroids(delta) {
@@ -604,12 +622,19 @@ function updateAsteroids(delta) {
   }
 }
 
+// ==========================================
+// ASTEROID ENDLESS RECYCLING
+// ==========================================
+
 function recycleAsteroids() {
-  if (!asteroids.length) return;
+  if (asteroids.length === 0) return;
 
   let farthest = Infinity;
+
   for (const item of asteroids) {
-    if (item.position.z < farthest) farthest = item.position.z;
+    if (item.position.z < farthest) {
+      farthest = item.position.z;
+    }
   }
 
   for (const asteroid of asteroids) {
@@ -619,7 +644,7 @@ function recycleAsteroids() {
       asteroid.position.set(
         randomAsteroidX(side),
         1+Math.random()*15,
-        farthest-55-Math.random()*25
+        farthest-26-Math.random()*25
       );
 
       asteroid.scale.setScalar(1.2+Math.random()*2.8);
@@ -705,26 +730,31 @@ ufoLoader.load(
 );
 
 // ==========================================
-// UFO ENERGY BULLETS
+// UFO ENERGY BULLET
 // ==========================================
+
+const bulletCoreGeometry = new THREE.SphereGeometry(0.32,16,12);
+const bulletGlowGeometry = new THREE.SphereGeometry(0.68,16,12);
+const bulletCoreMaterial = new THREE.MeshBasicMaterial({color:0x36eaff});
+const bulletGlowMaterial = new THREE.MeshBasicMaterial({
+  color:0x773cff,
+  transparent:true,
+  opacity:0.32,
+  depthWrite:false
+});
 
 function createEnergyBullet(origin,target) {
   const bullet = new THREE.Group();
 
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32,12,8),
-    new THREE.MeshBasicMaterial({color:0x36eaff})
+    bulletCoreGeometry,
+    bulletCoreMaterial
   );
   bullet.add(core);
 
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.68,12,8),
-    new THREE.MeshBasicMaterial({
-      color:0x773cff,
-      transparent:true,
-      opacity:0.32,
-      depthWrite:false
-    })
+    bulletGlowGeometry,
+    bulletGlowMaterial
   );
   bullet.add(glow);
 
@@ -751,6 +781,7 @@ function fireUFOBullet() {
   target.y += 0.9;
 
   createEnergyBullet(origin,target);
+  console.log("UFO fired energy bullet!");
 }
 
 function spawnUFO() {
@@ -775,6 +806,8 @@ function spawnUFO() {
   activeUFO = ufo;
   ufoLifetime = UFO_ACTIVE_TIME;
   ufoAttackTimer = 1.1;
+
+  console.log("UFO ATTACK STARTED!");
 }
 
 function removeUFO() {
@@ -786,17 +819,13 @@ function removeUFO() {
   ufoSpawnTimer =
     UFO_SPAWN_MIN+
     Math.random()*(UFO_SPAWN_MAX-UFO_SPAWN_MIN);
+
+  console.log("UFO disappeared");
 }
 
 function removeBullet(index) {
   const bullet = ufoBullets[index];
   scene.remove(bullet);
-
-  bullet.traverse(object => {
-    if (object.geometry) object.geometry.dispose();
-    if (object.material) object.material.dispose();
-  });
-
   ufoBullets.splice(index,1);
 }
 
@@ -806,6 +835,8 @@ function hitByUFO() {
   speedHitCooldown = 1.1;
   speedRecoveryTimer = UFO_PENALTY_TIME;
   speed *= UFO_SPEED_PENALTY;
+
+  console.log("UFO HIT! Temporary speed reduction.");
 
   const display = document.querySelector("#ah-cash");
   if (display) {
@@ -912,11 +943,14 @@ function loadEngineAudio() {
   engineAudioLoading = true;
   engineAudio.src = ENGINE_AUDIO_PATH;
   engineAudio.load();
+
+  console.log("AFTERHOURS: Loading V10 engine audio");
 }
 
 engineAudio.addEventListener("canplay",() => {
   engineAudioLoaded = true;
   engineAudioLoading = false;
+  console.log("AFTERHOURS: V10 engine audio ready");
 });
 
 engineAudio.addEventListener("error",() => {
@@ -943,7 +977,10 @@ function updateEngineAudio(delta) {
   if (!started) return;
 
   const engineActive = mobileAutoDrive || keys.gas;
-  const speedRatio = THREE.MathUtils.clamp(speed/MAX_SPEED,0,1);
+
+  const speedRatio = THREE.MathUtils.clamp(
+    speed/MAX_SPEED,0,1
+  );
 
   const targetVolume = engineActive
     ? 0.12+speedRatio*0.20
@@ -996,7 +1033,10 @@ controls.style.cssText = `
   padding:0 22px;box-sizing:border-box;z-index:30;
 `;
 
-controls.innerHTML = `<button data-control="brake">BRAKE</button>`;
+controls.innerHTML = `
+  <button data-control="brake">BRAKE</button>
+`;
+
 document.body.appendChild(controls);
 
 const brakeButton = controls.querySelector('[data-control="brake"]');
@@ -1032,6 +1072,7 @@ renderer.domElement.addEventListener("pointerdown",event => {
 
   steeringPointerId = event.pointerId;
   steeringStartX = event.clientX;
+
   renderer.domElement.setPointerCapture?.(event.pointerId);
 });
 
@@ -1063,9 +1104,9 @@ renderer.domElement.addEventListener("lostpointercapture",releaseSteering);
 window.addEventListener("keydown",event => {
   const key = event.key.toLowerCase();
 
-  if (["arrowleft","arrowright","arrowup","arrowdown"," "].includes(key)) {
-    event.preventDefault();
-  }
+  if ([
+    "arrowleft","arrowright","arrowup","arrowdown"," "
+  ].includes(key)) event.preventDefault();
 
   if (key==="arrowleft" || key==="a") keys.left = true;
   if (key==="arrowright" || key==="d") keys.right = true;
@@ -1184,6 +1225,7 @@ function updateDriving(delta) {
   }
 
   const speedDisplay = document.querySelector("#ah-speed");
+
   if (speedDisplay) {
     speedDisplay.textContent = String(
       Math.round(speed*160)
@@ -1191,6 +1233,7 @@ function updateDriving(delta) {
   }
 
   const ufoStatus = document.querySelector("#ah-ufo-status");
+
   if (ufoStatus) {
     if (speedRecoveryTimer>0) {
       ufoStatus.textContent = "⚡ SPEED RECOVERING";
@@ -1226,11 +1269,14 @@ function updateCash(delta,elapsedTime) {
       cashTotal += CASH_VALUE;
 
       const cashDisplay = document.querySelector("#ah-cash");
+
       if (cashDisplay) {
         cashDisplay.textContent =
           "CASH: $"+cashTotal.toLocaleString("en-US");
         cashDisplay.style.color = "#66ff9a";
       }
+
+      console.log("Cash collected! Total:",cashTotal);
 
       pickup.position.z = farthest-22-Math.random()*18;
       pickup.position.x = randomCashX();
@@ -1263,7 +1309,7 @@ function updateEndlessWorld() {
 
   for (const planet of roadsidePlanets) {
     if (planet.position.z>car.position.z+35) {
-      planet.position.z = farthest-75-Math.random()*25;
+      planet.position.z = farthest-55-Math.random()*25;
       planet.position.x =
         planet.userData.side*(23+Math.random()*10);
       planet.position.y = 8+Math.random()*12;
@@ -1286,7 +1332,7 @@ function updatePlanets(delta) {
 }
 
 // ==========================================
-// CAMERA — REUSED VECTOR
+// CAMERA
 // ==========================================
 
 const cameraTarget = new THREE.Vector3();
@@ -1316,8 +1362,11 @@ function updateCamera(delta) {
 window.addEventListener("resize",() => {
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
+
   renderer.setSize(window.innerWidth,window.innerHeight);
-  renderer.setPixelRatio(RENDER_PIXEL_RATIO);
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
+  );
 });
 
 // ==========================================
@@ -1363,5 +1412,5 @@ function animate() {
 animate();
 
 console.log(
-  "AFTERHOURS 0.9.11 INTEL GPU OPTIMIZED initialized"
+  "AFTERHOURS 0.9.12 ORIGINAL GAME + GPU OPTIMIZATION initialized"
 );
